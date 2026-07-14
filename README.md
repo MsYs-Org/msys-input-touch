@@ -1,6 +1,6 @@
 # MSYS Touch Input
 
-Current source version: `0.1.8`.
+Current source version: `0.1.11`.
 
 This repository is an independent, replaceable `input-method` role for MSYS.
 It is a normal supervised component, not PID 1 and not a desktop input bus. It
