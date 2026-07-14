@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+import ast
+from pathlib import Path
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+PACKAGE = ROOT / "files" / "app" / "msys_input_touch"
+
+
+class TouchUiContractTests(unittest.TestCase):
+    def test_every_tk_window_receives_manifest_identity_at_creation(self) -> None:
+        constructors = []
+        violations = []
+        for path in sorted(PACKAGE.glob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            identity_names = set()
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                    value = node.value
+                    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                    if value is not None and "MSYS_WINDOW_IDENTITY" in ast.unparse(value):
+                        identity_names.update(
+                            item.id for item in targets if isinstance(item, ast.Name)
+                        )
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                    continue
+                if node.func.attr not in {"Tk", "Toplevel"}:
+                    continue
+                constructors.append((path.name, node.lineno, node.func.attr))
+                keyword_name = "className" if node.func.attr == "Tk" else "class_"
+                value = next(
+                    (item.value for item in node.keywords if item.arg == keyword_name),
+                    None,
+                )
+                if value is None or not (
+                    "MSYS_WINDOW_IDENTITY" in ast.unparse(value)
+                    or isinstance(value, ast.Name) and value.id in identity_names
+                    or isinstance(value, ast.Attribute) and value.attr == "identity"
+                ):
+                    violations.append(f"{path.name}:{node.lineno}:{node.func.attr}")
+        self.assertTrue(constructors)
+        self.assertFalse(violations, str(violations))
+
+    def test_ui_does_not_grab_or_force_focus_and_uses_timer_motion(self) -> None:
+        source = (PACKAGE / "ui.py").read_text(encoding="utf-8")
+        self.assertNotIn("grab_set", source)
+        self.assertNotIn("focus_force", source)
+        self.assertNotIn("time.sleep", source)
+        self.assertIn("overrideredirect(True)", source)
+        self.assertIn('name="keyboard"', source)
+        self.assertIn('attributes("-type", "dock")', source)
+        self.assertIn("root.after(18", source)
+        self.assertIn("root.after(16", source)
+        self.assertIn("bind_tk_text_wrap", source)
+        self.assertNotIn('attributes("-alpha"', source)
+        self.assertIn("configure_tk_window_identity", source)
+
+    def test_repo_has_no_external_input_framework_dependency(self) -> None:
+        combined = "\n".join(
+            path.read_text(encoding="utf-8", errors="replace")
+            for path in [
+                ROOT / "manifest.json",
+                ROOT / "pyproject.toml",
+                *sorted(PACKAGE.glob("*.py")),
+            ]
+        ).lower()
+        for forbidden in ("import dbus", "import ibus", "import fcitx", "pyside", "pyqt"):
+            self.assertNotIn(forbidden, combined)
+
+
+if __name__ == "__main__":
+    unittest.main()

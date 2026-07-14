@@ -1,0 +1,69 @@
+# `input-method` role v1
+
+The provider is addressed as `role:input-method`. Calls use ordinary mIPC
+objects and return `msys.input-method-state.v1` payloads.
+
+## Methods
+
+```text
+show({mode?})
+hide({})
+toggle({mode?})
+set_mode({mode})
+status({})
+```
+
+`mode` is one of `en`, `zh`, `numeric`, or `symbols`. Every successful reply
+contains:
+
+```json
+{
+  "ok": true,
+  "schema": "msys.input-method-state.v1",
+  "visible": true,
+  "mode": "zh",
+  "layout": "letters",
+  "locale": "zh-CN",
+  "shift": false,
+  "composition": "nihao",
+  "backend": {"name": "xtest", "available": true},
+  "has_focus_target": true
+}
+```
+
+Unknown methods and invalid modes return an mIPC error; they do not change the
+current state. This role deliberately does not expose an RPC that injects
+arbitrary text. Applications request visibility and mode, while actual input
+still requires a local touch on the keyboard.
+
+## Automatic dismissal
+
+The stock touch implementation also hides locally, without sending a focus
+restore, when one of these observable conditions occurs:
+
+- a new primary pointer press lands outside its panel (including the Home or
+  Back navigation region);
+- X11 focus remains on another non-keyboard surface for three samples, or
+  remains unavailable for three samples (single transient focus changes are
+  ignored);
+- a matching `msys.lifecycle.transition` announces `closing`, `closed`, or
+  `failed` for the target component/identity.
+
+The component has no Core RPC idle timeout because the user can type for a
+long time without another RPC. Instead it exits normally shortly after a hide
+animation, preserving true `on-demand` memory behavior. X11 cannot expose a
+portable semantic "this is a text control" signal for arbitrary Tk/Qt/Electron
+apps, so an application that moves between text fields should call `show`
+again from its own focus callback. Its manifest uses `restart: never`: Core
+must treat the next role call as the wake-up path, rather than respawning an
+intentionally hidden keyboard after its control socket closes.
+
+An explicit component `start` does not map a keyboard. The stock provider
+releases that initial hidden generation after 750 ms unless a valid `show`
+request arrives. A `show` without a generation-checked focus target is rejected
+back into the same hidden-release path, and every Home/focus-loss hide re-arms
+that release timer.
+
+The contract is toolkit-neutral. A future Qt, C/C++, Electron, Wayland, or
+hardware-keyboard implementation can replace this provider without changing
+application calls.
