@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from msys_input_touch.focus import (
+    CAPTURE_COALESCE_SECONDS,
     FocusManager,
     FocusTarget,
     FocusTargetError,
@@ -93,6 +94,41 @@ class FocusPolicyTests(unittest.TestCase):
         backend.focused = 0x88
         self.assertEqual(manager.capture(), target)
         self.assertEqual(len(calls), 1)
+
+    def test_immediate_duplicate_capture_reuses_generation_checked_target(self) -> None:
+        backend = FakeBackend()
+        now = [100.0]
+        calls = []
+        manager = FocusManager(
+            backend,
+            public_call=lambda *args, **kwargs: (
+                calls.append((args, kwargs)) or window_response()
+            ),
+            clock=lambda: now[0],
+        )
+
+        first = manager.capture()
+        now[0] += CAPTURE_COALESCE_SECONDS / 2
+        self.assertEqual(manager.capture(), first)
+        self.assertEqual(len(calls), 1)
+
+        now[0] += CAPTURE_COALESCE_SECONDS + 0.01
+        self.assertEqual(manager.capture(), first)
+        self.assertEqual(len(calls), 2)
+
+    def test_changed_focus_never_uses_startup_capture_cache(self) -> None:
+        backend = FakeBackend()
+        calls = []
+        manager = FocusManager(
+            backend,
+            public_call=lambda *args, **kwargs: (
+                calls.append((args, kwargs)) or window_response()
+            ),
+        )
+        self.assertIsNotNone(manager.capture())
+        backend.focused = 0x99
+        self.assertIsNone(manager.capture())
+        self.assertEqual(len(calls), 2)
 
     def test_unresolved_new_window_cannot_reuse_previous_text_target(self) -> None:
         backend = FakeBackend()

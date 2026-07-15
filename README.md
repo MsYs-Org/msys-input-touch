@@ -1,6 +1,20 @@
 # MSYS Touch Input
 
-Current source version: `0.1.14`.
+Current source version: `0.1.16`.
+
+Version 0.1.16 moves the non-Tk focus probe to the very beginning of a cold
+generation, before importing Tk, opening the host window, loading fonts, or
+parsing the Pinyin dictionary. Those startup costs now overlap the window
+manager lookup rather than preceding it.
+
+Version 0.1.15 overlaps the first generation-checked focus lookup with the
+component hello/ready handshake and prepares the still-withdrawn stable Tk
+panel on the first idle turn after readiness. The provider acknowledges
+`show` before either operation completes, coalesces only an immediately
+repeated lookup for the same native focus, and logs bounded `startup_ms` and
+`show_to_map_ms` probes on the first map. The cache expires after one second,
+so the existing 15-second warm grace never turns into stale focus authority.
+The component remains on-demand and adds no boot-time resident process.
 
 Version 0.1.14 unmaps the keyboard immediately but keeps an already-used
 process warm for a bounded 15-second grace, avoiding repeated Tk cold starts

@@ -4,6 +4,7 @@ import argparse
 import os
 import queue
 import threading
+import time
 from typing import Any
 
 from msys_sdk import MsysClient, MsysConnectionClosed, MsysShutdown
@@ -94,39 +95,14 @@ def run(
     visible: bool = False,
     mode: str = "en",
 ) -> int:
-    import tkinter as tk
-
-    identity = os.environ.get("MSYS_WINDOW_IDENTITY", "org.msys.input.touch")
-    root = tk.Tk(className=identity)
-    configure_tk_fonts(root, default_size=9)
-    root.title("msys-touch-input-host")
-    root.withdraw()
-    root.update_idletasks()
-
-    try:
-        dictionary = load_dictionary()
-    except PinyinDictionaryError as exc:
-        print(f"input-method: invalid Pinyin dictionary: {exc}", flush=True)
-        root.destroy()
-        return 2
+    startup_started = time.monotonic()
     backend = create_backend()
     focus = FocusManager(backend)
-    worker = InjectionWorker(focus, backend)
     control = InputMethodControl(mode=mode)
     control.set_runtime_status(
         backend_name=str(getattr(backend, "name", "unavailable")),
         backend_available=bool(getattr(backend, "available", False)),
     )
-    model = KeyboardModel(dictionary, mode=mode)
-    ui_events: queue.SimpleQueue[tuple[int, ControlEvent] | tuple[int, None]] = (
-        queue.SimpleQueue()
-    )
-    visibility_revision = 0
-    revision_lock = threading.Lock()
-    visibility_guard = InputVisibilityGuard()
-    hidden_exit_gate = HiddenExitGate()
-    supervised_stop_requested = threading.Event()
-    pointer_watch_available = True
 
     def update_target_status() -> None:
         control.set_runtime_status(has_focus_target=focus.target is not None)
@@ -162,8 +138,50 @@ def run(
             daemon=True,
         ).start()
 
+    # A cold role activation is already waiting for this generation to become
+    # ready.  Begin its generation-checked focus lookup before importing Tk,
+    # opening the host window, loading fonts, or parsing the Pinyin catalog.
+    # This work is independent of Tk and does not delay the ready handshake.
+    if not standalone:
+        request_capture()
+
+    import tkinter as tk
+
+    identity = os.environ.get("MSYS_WINDOW_IDENTITY", "org.msys.input.touch")
+    root = tk.Tk(className=identity)
+    configure_tk_fonts(root, default_size=9)
+    root.title("msys-touch-input-host")
+    root.withdraw()
+    root.update_idletasks()
+
+    try:
+        dictionary = load_dictionary()
+    except PinyinDictionaryError as exc:
+        print(f"input-method: invalid Pinyin dictionary: {exc}", flush=True)
+        root.destroy()
+        return 2
+    worker = InjectionWorker(focus, backend)
+    model = KeyboardModel(dictionary, mode=mode)
+    ui_events: queue.SimpleQueue[tuple[int, ControlEvent] | tuple[int, None]] = (
+        queue.SimpleQueue()
+    )
+    visibility_revision = 0
+    revision_lock = threading.Lock()
+    visibility_guard = InputVisibilityGuard()
+    hidden_exit_gate = HiddenExitGate()
+    supervised_stop_requested = threading.Event()
+    pointer_watch_available = True
+    startup_lock = threading.Lock()
+    first_show_requested_at: float | None = None
+    first_show_target_prepared = False
+    first_show_panel_prepared = False
+    first_show_logged = False
+
     def schedule_control(event: ControlEvent | None) -> None:
         nonlocal visibility_revision
+        nonlocal first_show_requested_at
+        nonlocal first_show_target_prepared
+        nonlocal first_show_panel_prepared
         if event is None:
             return
         if event.action in {"show", "hide"}:
@@ -176,6 +194,12 @@ def run(
         if event.action != "show":
             ui_events.put((revision, event))
             return
+
+        with startup_lock:
+            if first_show_requested_at is None:
+                first_show_requested_at = time.monotonic()
+                first_show_target_prepared = has_usable_focus_target(focus.target)
+                first_show_panel_prepared = view.prepared
 
         def capture_then_show() -> None:
             capture_focus()
@@ -311,6 +335,7 @@ def run(
         arm_hidden_exit(event.reason)
 
     def pump_ui() -> None:
+        nonlocal first_show_logged
         while True:
             try:
                 revision, event = ui_events.get_nowait()
@@ -342,6 +367,27 @@ def run(
                 continue
             view.apply_control_event(event)
             apply_visibility_lifecycle(event)
+            if event.action == "show":
+                with startup_lock:
+                    if not first_show_logged:
+                        first_show_logged = True
+                        requested_at = first_show_requested_at
+                        target_prepared = first_show_target_prepared
+                        panel_prepared = first_show_panel_prepared
+                    else:
+                        requested_at = None
+                        target_prepared = False
+                        panel_prepared = False
+                if requested_at is not None:
+                    now = time.monotonic()
+                    print(
+                        "input-method: first-map "
+                        f"startup_ms={round((now - startup_started) * 1000)} "
+                        f"show_to_map_ms={round((now - requested_at) * 1000)} "
+                        f"target_prepared={str(target_prepared).lower()} "
+                        f"panel_prepared={str(panel_prepared).lower()}",
+                        flush=True,
+                    )
         root.after(30, pump_ui)
 
     client: MsysClient | None = None
@@ -351,6 +397,11 @@ def run(
         client.hello()
         client.subscribe("msys.lifecycle.transition")
         client.ready()
+        # Building Tk widgets is deliberately not on the readiness path.
+        # Prepare the withdrawn stable panel at the first Tk idle turn; a show
+        # call is acknowledged immediately by the IPC reader and the normal
+        # UI queue maps this already-built panel when its target is ready.
+        root.after_idle(view.prepare)
         # An operator may explicitly start the component rather than call the
         # role's show method.  It starts hidden by contract, so make that
         # generation self-reclaim unless a valid show cancels this timer.
@@ -361,7 +412,8 @@ def run(
         )
         print(
             "input-method: ready "
-            f"backend={getattr(backend, 'name', 'unavailable')}",
+            f"backend={getattr(backend, 'name', 'unavailable')} "
+            f"startup_ms={round((time.monotonic() - startup_started) * 1000)}",
             flush=True,
         )
 

@@ -116,6 +116,30 @@ class TouchUiContractTests(unittest.TestCase):
         self.assertNotIn("tk.Canvas(", source)
         self.assertNotIn('.delete("all")', source)
 
+    def test_hidden_panel_can_be_prepared_without_mapping(self) -> None:
+        view = TouchKeyboardView.__new__(TouchKeyboardView)
+        view.panel = None
+        view._build_panel = mock.Mock()
+        self.assertFalse(view.prepared)
+        view.prepare()
+        view._build_panel.assert_called_once_with()
+
+    def test_startup_overlaps_focus_probe_and_panel_build_with_role_readiness(self) -> None:
+        source = (PACKAGE / "service.py").read_text(encoding="utf-8")
+        run_body = source.split("def run(", 1)[1]
+        supervised = source.split("if not standalone:", 1)[1]
+        self.assertLess(
+            run_body.index("\n        request_capture()"),
+            run_body.index("import tkinter as tk"),
+        )
+        self.assertLess(
+            supervised.index("client.ready()"),
+            supervised.index("root.after_idle(view.prepare)"),
+        )
+        self.assertIn("input-method: first-map", source)
+        self.assertIn("show_to_map_ms=", source)
+        self.assertIn("startup_ms=", source)
+
 
 if __name__ == "__main__":
     unittest.main()

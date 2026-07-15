@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -12,6 +13,7 @@ class FocusTargetError(RuntimeError):
 
 
 PublicCall = Callable[..., dict[str, Any]]
+CAPTURE_COALESCE_SECONDS = 1.0
 
 
 def return_payload(response: object, operation: str) -> dict[str, Any]:
@@ -94,12 +96,15 @@ class FocusManager:
         backend: object,
         *,
         public_call: PublicCall = MsysClient.public_call,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.backend = backend
         self.public_call = public_call
+        self._clock = clock
         self._lock = threading.Lock()
         self._capture_lock = threading.Lock()
         self._target: FocusTarget | None = None
+        self._target_captured_at = 0.0
         self._keyboard_windows: set[int] = set()
 
     @property
@@ -135,6 +140,7 @@ class FocusManager:
             if expected is not None and self._target != expected:
                 return False
             self._target = None
+            self._target_captured_at = 0.0
             return True
 
     def capture(self) -> FocusTarget | None:
@@ -143,16 +149,33 @@ class FocusManager:
         with self._capture_lock:
             with self._lock:
                 previous = self._target
+                previous_captured_at = self._target_captured_at
             try:
                 native = parse_native_xid(self.backend.focused_window())
             except Exception:
                 with self._lock:
                     if self._target == previous:
                         self._target = None
+                        self._target_captured_at = 0.0
                 raise
             with self._lock:
                 if not native or native in self._keyboard_windows:
                     return self._target
+                if (
+                    self._target == previous
+                    and previous is not None
+                    and native == previous.native_xid
+                    and self._clock() - previous_captured_at
+                    <= CAPTURE_COALESCE_SECONDS
+                ):
+                    # Startup performs a typed lookup in parallel with the
+                    # component handshake.  The immediately following show
+                    # observes the same X11 focus, so reuse that very recent
+                    # generation-checked result instead of opening a second
+                    # public mIPC round trip.  The short bound deliberately
+                    # does not turn the 15-second warm grace into a stale-ID
+                    # cache.
+                    return previous
             try:
                 response = self.public_call(
                     "role:window-manager",
@@ -167,11 +190,13 @@ class FocusManager:
                 with self._lock:
                     if self._target == previous:
                         self._target = None
+                        self._target_captured_at = 0.0
                 raise
             with self._lock:
                 if self._target != previous:
                     return self._target
                 self._target = candidate
+                self._target_captured_at = self._clock() if candidate is not None else 0.0
                 return candidate
 
     def ensure_target(self) -> FocusTarget:
@@ -197,6 +222,7 @@ class FocusManager:
 
 
 __all__ = [
+    "CAPTURE_COALESCE_SECONDS",
     "FocusManager",
     "FocusTarget",
     "FocusTargetError",

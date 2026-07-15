@@ -72,6 +72,17 @@ class TouchKeyboardView:
         self._drag_after: str | None = None
         self.root.after(30, self._pump_results)
 
+    @property
+    def prepared(self) -> bool:
+        """Whether the hidden panel and its stable widget tree already exist."""
+
+        return self.panel is not None
+
+    def prepare(self) -> None:
+        """Build the withdrawn panel without mapping or changing focus."""
+
+        self._build_panel()
+
     def _build_panel(self) -> None:
         if self.panel is not None:
             return
