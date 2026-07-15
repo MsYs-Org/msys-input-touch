@@ -70,6 +70,12 @@ class TouchUiContractTests(unittest.TestCase):
         for forbidden in ("import dbus", "import ibus", "import fcitx", "pyside", "pyqt"):
             self.assertNotIn(forbidden, combined)
 
+    def test_key_refresh_keeps_stable_widget_subtrees(self) -> None:
+        source = (PACKAGE / "ui.py").read_text(encoding="utf-8")
+        self.assertIn("layout_signature != self._rendered_layout", source)
+        self.assertIn("candidates != self._rendered_candidates", source)
+        self.assertIn("if self.status_var.get() != value", source)
+
 
 if __name__ == "__main__":
     unittest.main()

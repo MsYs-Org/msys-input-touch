@@ -19,7 +19,9 @@ class KeyboardModelTests(unittest.TestCase):
         self.assertEqual(model.handle("shift")[0].kind, "refresh")
         action = model.handle("char:a")[0]
         self.assertEqual((action.kind, action.value), ("key", "A"))
+        self.assertTrue(action.refresh)
         self.assertFalse(model.shift)
+        self.assertFalse(model.handle("char:b")[0].refresh)
         self.assertEqual(model.handle("backspace")[0].value, "BackSpace")
         self.assertEqual(model.handle("enter")[0].value, "Return")
         self.assertEqual(model.handle("space")[0].value, "space")
@@ -73,4 +75,3 @@ class KeyboardModelTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

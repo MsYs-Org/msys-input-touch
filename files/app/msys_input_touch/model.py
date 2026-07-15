@@ -100,12 +100,13 @@ class KeyboardModel:
             actions: list[InputAction] = []
             if self.mode == "zh" and self.composition:
                 actions.append(InputAction("text", self.composer.commit(), refresh=True))
+            layout_changed = self.shift
             if self.shift and character.isascii() and character.isalpha():
                 character = character.upper()
             if self.shift:
                 self.shift = False
             kind = "key" if ord(character) < 128 else "text"
-            actions.append(InputAction(kind, character, refresh=True))
+            actions.append(InputAction(kind, character, refresh=layout_changed))
             return tuple(actions)
         return ()
 
@@ -171,4 +172,3 @@ __all__ = [
     "KeySpec",
     "KeyboardModel",
 ]
-

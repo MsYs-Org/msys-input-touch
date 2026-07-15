@@ -56,6 +56,13 @@ class TouchKeyboardView:
             else text("keyboard.status.backend_unavailable")
         )
         self.status_var = tk.StringVar(master=root, value=initial_status)
+        # Tk invalidates every child when a widget subtree is destroyed and
+        # rebuilt.  On the SPI output those unrelated rectangles are merged
+        # with the target application's text damage into one large bounding
+        # box.  Keep snapshots of the two dynamic keyboard regions so a
+        # normal key press never reconstructs the whole panel.
+        self._rendered_layout: tuple[tuple[tuple[str, str, int, bool], ...], ...] | None = None
+        self._rendered_candidates: tuple[str, ...] | None = None
         self.pending: deque[InputAction] = deque(maxlen=64)
         self.active_job: int | None = None
         self._job_revision = 0
@@ -232,70 +239,95 @@ class TouchKeyboardView:
             return
         tk = self.tk
         if self.mode_label is not None:
-            self.mode_label.configure(text=text(f"keyboard.mode.{self.model.mode}"))
+            mode_text = text(f"keyboard.mode.{self.model.mode}")
+            if str(self.mode_label.cget("text")) != mode_text:
+                self.mode_label.configure(text=mode_text)
         if self.composition_label is not None:
             composition = self.model.composition
-            self.composition_label.configure(
-                text=(composition or text("keyboard.composition.empty"))
+            composition_text = (
+                (composition or text("keyboard.composition.empty"))
                 if self.model.mode == "zh"
-                else text(f"keyboard.mode.{self.model.mode}"),
-                fg="#9cc9ff" if composition else "#7f8d9b",
+                else text(f"keyboard.mode.{self.model.mode}")
             )
+            composition_color = "#9cc9ff" if composition else "#7f8d9b"
+            changes: dict[str, str] = {}
+            if str(self.composition_label.cget("text")) != composition_text:
+                changes["text"] = composition_text
+            if str(self.composition_label.cget("fg")) != composition_color:
+                changes["fg"] = composition_color
+            if changes:
+                self.composition_label.configure(**changes)
         if self.candidate_frame is not None:
-            for child in self.candidate_frame.winfo_children():
-                child.destroy()
             candidate_columns = responsive_columns(
                 max(1, int(self.panel.winfo_width()) - 110),
                 minimum_item_width=48,
                 gap=2,
                 maximum=5,
             )
-            for index, candidate in enumerate(self.model.candidates[:candidate_columns]):
-                tile = tk.Label(
-                    self.candidate_frame,
-                    text=candidate,
-                    bg="#25303b",
-                    fg="#f2f5f8",
-                    padx=5,
-                    pady=3,
-                    font=font_spec(self.panel, 9, "bold"),
-                    cursor="hand2",
-                    takefocus=0,
-                )
-                tile.pack(side="left", padx=1, pady=2)
-                self._bind_tile(
-                    tile,
-                    f"candidate:{index}",
-                    normal="#25303b",
-                    pressed="#436080",
-                )
-        for child in self.keys_frame.winfo_children():
-            child.destroy()
-        for row_keys in self.model.layout():
-            row = tk.Frame(self.keys_frame, bg="#11151b")
-            row.pack(fill="both", expand=True)
-            for column, key in enumerate(row_keys):
-                row.grid_columnconfigure(column, weight=max(1, key.weight), uniform="keys")
-                normal = "#31567e" if key.accent else "#26303b"
-                pressed = "#527cad" if key.accent else "#465463"
-                tile = tk.Label(
-                    row,
-                    text=self._key_label(key),
-                    bg=normal,
-                    fg="#f4f6f8",
-                    font=font_spec(self.panel, 9, "bold"),
-                    borderwidth=0,
-                    cursor="hand2",
-                    takefocus=0,
-                )
-                tile.grid(row=0, column=column, sticky="nsew", padx=1, pady=1)
-                self._bind_tile(tile, key.token, normal=normal, pressed=pressed)
-            row.grid_rowconfigure(0, weight=1)
+            candidates = tuple(self.model.candidates[:candidate_columns])
+            if candidates != self._rendered_candidates:
+                for child in self.candidate_frame.winfo_children():
+                    child.destroy()
+                for index, candidate in enumerate(candidates):
+                    tile = tk.Label(
+                        self.candidate_frame,
+                        text=candidate,
+                        bg="#25303b",
+                        fg="#f2f5f8",
+                        padx=5,
+                        pady=3,
+                        font=font_spec(self.panel, 9, "bold"),
+                        cursor="hand2",
+                        takefocus=0,
+                    )
+                    tile.pack(side="left", padx=1, pady=2)
+                    self._bind_tile(
+                        tile,
+                        f"candidate:{index}",
+                        normal="#25303b",
+                        pressed="#436080",
+                    )
+                self._rendered_candidates = candidates
+        layout = self.model.layout()
+        layout_signature = tuple(
+            tuple((key.token, key.label, key.weight, key.accent) for key in row)
+            for row in layout
+        )
+        if layout_signature != self._rendered_layout:
+            for child in self.keys_frame.winfo_children():
+                child.destroy()
+            for row_keys in layout:
+                row = tk.Frame(self.keys_frame, bg="#11151b")
+                row.pack(fill="both", expand=True)
+                for column, key in enumerate(row_keys):
+                    row.grid_columnconfigure(column, weight=max(1, key.weight), uniform="keys")
+                    normal = "#31567e" if key.accent else "#26303b"
+                    pressed = "#527cad" if key.accent else "#465463"
+                    tile = tk.Label(
+                        row,
+                        text=self._key_label(key),
+                        bg=normal,
+                        fg="#f4f6f8",
+                        font=font_spec(self.panel, 9, "bold"),
+                        borderwidth=0,
+                        cursor="hand2",
+                        takefocus=0,
+                    )
+                    tile.grid(row=0, column=column, sticky="nsew", padx=1, pady=1)
+                    self._bind_tile(tile, key.token, normal=normal, pressed=pressed)
+                row.grid_rowconfigure(0, weight=1)
+            self._rendered_layout = layout_signature
         self.control.update_ui_state(
             mode=self.model.mode,
             shift=self.model.shift,
             composition=self.model.composition,
         )
+
+    def _set_status(self, value: str) -> None:
+        """Avoid invalidating the status row when its text did not change."""
+
+        if self.status_var.get() != value:
+            self.status_var.set(value)
 
     def _handle_token(self, token: str) -> None:
         actions = self.model.handle(token)
@@ -317,7 +349,7 @@ class TouchKeyboardView:
             return
         if not bool(getattr(self.worker.backend, "available", False)):
             self.pending.clear()
-            self.status_var.set(text("keyboard.status.backend_unavailable"))
+            self._set_status(text("keyboard.status.backend_unavailable"))
             return
         action = self.pending.popleft()
         self._job_revision += 1
@@ -329,7 +361,7 @@ class TouchKeyboardView:
                 self.root.clipboard_append(action.value)
                 self.root.update_idletasks()
             except self.tk.TclError as exc:
-                self.status_var.set(
+                self._set_status(
                     text("keyboard.status.inject_failed", {"error": str(exc)[:96]})
                 )
                 self.active_job = None
@@ -352,7 +384,7 @@ class TouchKeyboardView:
             except queue.Empty:
                 break
             if result.ok:
-                self.status_var.set(text("keyboard.status.ready"))
+                self._set_status(text("keyboard.status.ready"))
             else:
                 message = result.error[:96]
                 key = (
@@ -360,7 +392,7 @@ class TouchKeyboardView:
                     if "target" in message.lower()
                     else "keyboard.status.inject_failed"
                 )
-                self.status_var.set(
+                self._set_status(
                     text(key, {"error": message})
                     if key.endswith("inject_failed")
                     else text(key)
@@ -385,11 +417,11 @@ class TouchKeyboardView:
         assert self.panel is not None
         state = self.control.snapshot()
         if not state["backend"]["available"]:
-            self.status_var.set(text("keyboard.status.backend_unavailable"))
+            self._set_status(text("keyboard.status.backend_unavailable"))
         elif not state["has_focus_target"]:
-            self.status_var.set(text("keyboard.status.no_target"))
+            self._set_status(text("keyboard.status.no_target"))
         else:
-            self.status_var.set(text("keyboard.status.ready"))
+            self._set_status(text("keyboard.status.ready"))
         inset_text = os.environ.get("MSYS_KEYBOARD_BOTTOM_INSET", "42")
         try:
             inset = int(inset_text)
