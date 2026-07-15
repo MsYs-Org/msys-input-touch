@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import ast
+from collections import deque
 from pathlib import Path
 import unittest
+from unittest import mock
+
+from msys_input_touch.model import KeyboardModel
+from msys_input_touch.pinyin import PinyinDictionary
+from msys_input_touch.ui import TouchKeyboardView
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -70,11 +76,45 @@ class TouchUiContractTests(unittest.TestCase):
         for forbidden in ("import dbus", "import ibus", "import fcitx", "pyside", "pyqt"):
             self.assertNotIn(forbidden, combined)
 
+    def test_character_actions_request_only_their_required_damage(self) -> None:
+        dictionary = PinyinDictionary.from_mapping({
+            "schema": "msys.pinyin-dictionary.v1",
+            "entries": {"ni": ["你", "呢"]},
+        })
+
+        def view_for(mode: str) -> TouchKeyboardView:
+            view = TouchKeyboardView.__new__(TouchKeyboardView)
+            view.model = KeyboardModel(dictionary, mode)
+            view.pending = deque(maxlen=64)
+            view._render = mock.Mock()
+            view._start_next_job = mock.Mock()
+            return view
+
+        english = view_for("en")
+        english_layout = english.model.layout()
+        english._handle_token("char:a")
+        self.assertEqual(english.model.layout(), english_layout)
+        self.assertEqual(english.pending[0].value, "a")
+        english._render.assert_not_called()
+
+        chinese = view_for("zh")
+        chinese_layout = chinese.model.layout()
+        chinese._handle_token("char:n")
+        self.assertEqual(chinese.model.layout(), chinese_layout)
+        self.assertEqual(chinese.model.composition, "n")
+        self.assertFalse(chinese.pending)
+        chinese._render.assert_called_once_with()
+
     def test_key_refresh_keeps_stable_widget_subtrees(self) -> None:
         source = (PACKAGE / "ui.py").read_text(encoding="utf-8")
         self.assertIn("layout_signature != self._rendered_layout", source)
         self.assertIn("candidates != self._rendered_candidates", source)
+        self.assertEqual(source.count("child.destroy()"), 2)
         self.assertIn("if self.status_var.get() != value", source)
+        self.assertIn("widget.configure(bg=pressed)", source)
+        self.assertIn("widget.configure(bg=normal)", source)
+        self.assertNotIn("tk.Canvas(", source)
+        self.assertNotIn('.delete("all")', source)
 
 
 if __name__ == "__main__":
