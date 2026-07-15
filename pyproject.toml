@@ -1,6 +1,6 @@
 [project]
 name = "msys-input-touch"
-version = "0.1.12"
+version = "0.1.13"
 description = "Replaceable dependency-free floating touch input method for MSYS"
 requires-python = ">=3.10"
 dependencies = ["msys-sdk>=0.1.6"]

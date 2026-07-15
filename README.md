@@ -1,6 +1,11 @@
 # MSYS Touch Input
 
-Current source version: `0.1.12`.
+Current source version: `0.1.13`.
+
+Version 0.1.13 is packaged with the IPC-first lazy SDK and the profile's
+font-doctor-verified CJK family.  A cold on-demand generation therefore avoids
+loading unrelated SDK UI modules and does not enumerate the target's full Xft
+font catalog before it can become ready.
 
 This repository is an independent, replaceable `input-method` role for MSYS.
 It is a normal supervised component, not PID 1 and not a desktop input bus. It
