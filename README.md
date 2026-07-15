@@ -1,6 +1,10 @@
 # MSYS Touch Input
 
-Current source version: `0.1.13`.
+Current source version: `0.1.14`.
+
+Version 0.1.14 unmaps the keyboard immediately but keeps an already-used
+process warm for a bounded 15-second grace, avoiding repeated Tk cold starts
+while moving between fields without adding boot-time RSS.
 
 Version 0.1.13 is packaged with the IPC-first lazy SDK and the profile's
 font-doctor-verified CJK family.  A cold on-demand generation therefore avoids
@@ -26,7 +30,10 @@ the next role call starts a new generation.
 
 An operator-only `start` does not imply `show`. A hidden generation, or a
 `show` request without a generation-checked editable target, is released after
-750 ms. A valid show cancels that timer; every later hide (including Home and
+15 seconds by default. The panel is unmapped immediately, while the bounded
+warm process avoids another Python/Tk cold start when the user moves to a
+nearby field. `MSYS_INPUT_WARM_MS` can tune the grace from 750 ms to 60 seconds
+without adding baseline RSS. A valid show cancels that timer; every later hide (including Home and
 focus loss) arms it again.
 
 ## Design boundary

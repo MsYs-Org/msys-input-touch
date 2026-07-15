@@ -6,13 +6,25 @@ from unittest import mock
 from msys_sdk import MsysConnectionClosed, MsysShutdown
 from msys_input_touch.focus import FocusTarget
 from msys_input_touch.service import (
+    DEFAULT_HIDDEN_EXIT_DELAY_MS,
     error_packet,
     has_usable_focus_target,
+    hidden_exit_delay_ms,
     request_component_stop,
 )
 
 
 class ServicePacketTests(unittest.TestCase):
+    def test_recently_hidden_process_has_bounded_configurable_warm_grace(self) -> None:
+        self.assertEqual(hidden_exit_delay_ms({}), DEFAULT_HIDDEN_EXIT_DELAY_MS)
+        self.assertEqual(hidden_exit_delay_ms({"MSYS_INPUT_WARM_MS": "500"}), 750)
+        self.assertEqual(hidden_exit_delay_ms({"MSYS_INPUT_WARM_MS": "25000"}), 25000)
+        self.assertEqual(hidden_exit_delay_ms({"MSYS_INPUT_WARM_MS": "999999"}), 60000)
+        self.assertEqual(
+            hidden_exit_delay_ms({"MSYS_INPUT_WARM_MS": "invalid"}),
+            DEFAULT_HIDDEN_EXIT_DELAY_MS,
+        )
+
     def test_errors_are_typed_and_correlated(self) -> None:
         packet = error_packet(7, ValueError("unsupported mode"))
         self.assertEqual(packet, {

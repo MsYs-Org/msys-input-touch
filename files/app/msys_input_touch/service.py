@@ -24,7 +24,25 @@ from .x11_input import PointerState, create_backend
 
 
 VISIBILITY_POLL_MS = 45
-HIDDEN_EXIT_DELAY_MS = 750
+DEFAULT_HIDDEN_EXIT_DELAY_MS = 15000
+MIN_HIDDEN_EXIT_DELAY_MS = 750
+MAX_HIDDEN_EXIT_DELAY_MS = 60000
+
+
+def hidden_exit_delay_ms(environ: dict[str, str] | None = None) -> int:
+    """Keep a recently used keyboard warm briefly, without baseline RSS.
+
+    Mapping is still removed immediately on hide.  Only the already-started
+    process gets a bounded grace period so moving between adjacent text fields
+    does not repeatedly pay the Python/Tk cold-start cost.
+    """
+
+    selected = os.environ if environ is None else environ
+    try:
+        value = int(selected.get("MSYS_INPUT_WARM_MS", DEFAULT_HIDDEN_EXIT_DELAY_MS))
+    except (TypeError, ValueError):
+        return DEFAULT_HIDDEN_EXIT_DELAY_MS
+    return max(MIN_HIDDEN_EXIT_DELAY_MS, min(MAX_HIDDEN_EXIT_DELAY_MS, value))
 
 
 def error_packet(request_id: int, error: Exception) -> dict[str, Any]:
@@ -247,7 +265,7 @@ def run(
             # before destroying Tk.  A show request racing this callback wins.
             ui_events.put((release_token, None))
 
-        root.after(HIDDEN_EXIT_DELAY_MS, release_if_still_hidden)
+        root.after(hidden_exit_delay_ms(), release_if_still_hidden)
 
     def request_supervised_exit() -> None:
         """Ask Core to stop us once, keeping Tk responsive until shutdown."""
