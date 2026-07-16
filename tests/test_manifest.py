@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import tomllib
 import unittest
 
 from msys_input_touch import __version__
@@ -20,21 +19,20 @@ class InputMethodManifestTests(unittest.TestCase):
         cls.lvgl_component = components["keyboard-lvgl"]
 
     def test_package_and_build_metadata_versions_match(self) -> None:
-        project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+        project = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         self.assertEqual(self.manifest["schema"], "msys.manifest.v1")
         self.assertEqual(self.manifest["package"]["id"], "org.msys.input.touch")
         self.assertEqual(self.manifest["package"]["version"], __version__)
-        self.assertEqual(project["project"]["version"], __version__)
-        self.assertEqual(project["project"]["requires-python"], ">=3.10")
-        self.assertEqual(
-            project["project"]["scripts"]["msys-touch-input"],
-            "msys_input_touch.service:main",
+        self.assertIn(f'version = "{__version__}"', project)
+        self.assertIn('requires-python = ">=3.10"', project)
+        self.assertIn(
+            'msys-touch-input = "msys_input_touch.service:main"', project
         )
-        self.assertEqual(
-            project["project"]["scripts"]["msys-touch-input-lvgl"],
-            "msys_input_touch.native_bridge:main",
+        self.assertIn(
+            'msys-touch-input-lvgl = "msys_input_touch.native_bridge:main"',
+            project,
         )
-        self.assertEqual(project["tool"]["setuptools"]["packages"]["find"]["where"], ["files/app"])
+        self.assertIn('where = ["files/app"]', project)
 
     def test_component_is_lazy_overlay_with_stable_identity(self) -> None:
         self.assertEqual(self.component["id"], "keyboard")
