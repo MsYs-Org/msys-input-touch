@@ -517,23 +517,6 @@ static int document_bind_cb(lv_xml_component_scope_t *scope, void *user_data)
     return 0;
 }
 
-static lv_obj_t *find_named(lv_obj_t *root, const char *name)
-{
-    uint32_t index;
-    uint32_t count;
-    lv_obj_t *match;
-    const char *object_name;
-    if(root == NULL || name == NULL) return NULL;
-    object_name = lv_obj_get_name(root);
-    if(object_name != NULL && strcmp(object_name, name) == 0) return root;
-    count = lv_obj_get_child_count(root);
-    for(index = 0U; index < count; index++) {
-        match = find_named(lv_obj_get_child(root, (int32_t)index), name);
-        if(match != NULL) return match;
-    }
-    return NULL;
-}
-
 static bool build_ui_document(keyboard_t *keyboard, const char *path)
 {
     msys_ui_document_config_t config = {
@@ -548,11 +531,13 @@ static bool build_ui_document(keyboard_t *keyboard, const char *path)
            MSYS_UI_DOCUMENT_OK)
         return false;
     keyboard->screen = msys_ui_document_root(keyboard->document);
-    keyboard->mode_label = find_named(keyboard->screen, "mode");
-    keyboard->composition = find_named(keyboard->screen, "composition");
-    keyboard->candidates = find_named(keyboard->screen, "candidates");
-    keyboard->keys = find_named(keyboard->screen, "keys");
-    hide = find_named(keyboard->screen, "hide");
+    keyboard->mode_label = msys_ui_document_find(keyboard->document, "mode");
+    keyboard->composition = msys_ui_document_find(keyboard->document,
+                                                   "composition");
+    keyboard->candidates = msys_ui_document_find(keyboard->document,
+                                                  "candidates");
+    keyboard->keys = msys_ui_document_find(keyboard->document, "keys");
+    hide = msys_ui_document_find(keyboard->document, "hide");
     if(keyboard->mode_label == NULL || keyboard->composition == NULL ||
        keyboard->candidates == NULL || keyboard->keys == NULL || hide == NULL)
         return false;
