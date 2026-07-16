@@ -561,20 +561,23 @@ int main(int argc, char **argv)
     if(surface_config.width < 240U || surface_config.height < 148U) return 2;
     keyboard.runtime = msys_ui_runtime_create(&runtime_config);
     if(keyboard.runtime == NULL) return 1;
+    (void)msys_ui_dynamic_fonts_init(NULL);
     keyboard.policy = msys_ui_runtime_policy(keyboard.runtime);
     keyboard.surface = msys_ui_surface_create(keyboard.runtime, &surface_config);
     if(keyboard.surface == NULL) {
+        msys_ui_dynamic_fonts_shutdown();
         msys_ui_runtime_destroy(keyboard.runtime);
         return 1;
     }
     keyboard.theme = msys_ui_theme_create(
         msys_ui_surface_display(keyboard.surface), keyboard.policy);
     if(keyboard.theme == NULL) {
+        msys_ui_dynamic_fonts_shutdown();
         msys_ui_runtime_destroy(keyboard.runtime);
         return 1;
     }
     msys_ui_theme_set_font_provider(keyboard.theme,
-                                    msys_ui_builtin_font_provider, NULL,
+                                    msys_ui_font_provider, NULL,
                                     "zh-CN");
     build_ui(&keyboard);
     flags = fcntl(STDIN_FILENO, F_GETFL, 0);
@@ -595,6 +598,7 @@ int main(int argc, char **argv)
         pump_commands(&keyboard);
     }
     msys_ui_theme_destroy(keyboard.theme);
+    msys_ui_dynamic_fonts_shutdown();
     msys_ui_runtime_destroy(keyboard.runtime);
     active_keyboard = NULL;
     return 0;

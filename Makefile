@@ -8,7 +8,7 @@ CPPFLAGS += -I$(UI_ROOT) -I$(UI_ROOT)/include -I$(UI_ROOT)/vendor/lvgl \
 CFLAGS ?= -Os -g0 -DNDEBUG
 CFLAGS += -std=c11 -Wall -Wextra -Wpedantic -Werror \
 	-ffunction-sections -fdata-sections
-LDLIBS += -lX11 -lm
+LDLIBS += -lX11 -lm -ldl
 
 UI_LIBRARY := $(UI_ROOT)/build/libmsys-ui-lvgl.a
 TARGET := $(BUILD_DIR)/msys-input-touch-lvgl
