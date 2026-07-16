@@ -3,3 +3,6 @@ README.md
 docs
 pyproject.toml
 tests
+Makefile
+native
+scripts

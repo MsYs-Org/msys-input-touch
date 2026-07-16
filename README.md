@@ -1,6 +1,17 @@
 # MSYS Touch Input
 
-Current source version: `0.1.17`.
+Current source version: `0.2.0`.
+
+Version 0.2.0 adds an optional `keyboard-lvgl` provider while retaining the
+existing Python/Tk `keyboard` as the higher-priority default.  The optional
+provider uses a small C/LVGL window connected to a Python business bridge:
+focus capture, lifecycle dismissal, the bounded Pinyin model, XTest/xdotool
+injection and the hidden Tk clipboard owner stay unchanged.  This preserves
+the Qt, Tk and Electron Ctrl+V path for Chinese candidates without making the
+renderer toolkit-specific.  The LVGL surface uses the replaceable shared font
+provider, portrait/landscape geometry at process start, local key/candidate
+feedback and bounded show/hide motion.  It has no periodic invalidation while
+hidden or idle.
 
 Version 0.1.17 gives navigation dismissal an explicit no-focus-restore
 contract, so Back cannot immediately reopen the keyboard through the old

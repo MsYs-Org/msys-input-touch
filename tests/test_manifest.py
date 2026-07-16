@@ -16,6 +16,7 @@ class InputMethodManifestTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
         cls.component = cls.manifest["components"][0]
+        cls.lvgl_component = cls.manifest["components"][1]
 
     def test_package_and_build_metadata_versions_match(self) -> None:
         project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
@@ -27,6 +28,10 @@ class InputMethodManifestTests(unittest.TestCase):
         self.assertEqual(
             project["project"]["scripts"]["msys-touch-input"],
             "msys_input_touch.service:main",
+        )
+        self.assertEqual(
+            project["project"]["scripts"]["msys-touch-input-lvgl"],
+            "msys_input_touch.native_bridge:main",
         )
         self.assertEqual(project["tool"]["setuptools"]["packages"]["find"]["where"], ["files/app"])
 
@@ -68,6 +73,22 @@ class InputMethodManifestTests(unittest.TestCase):
             "summary_key": "app.summary",
         })
         self.assertTrue((ROOT / metadata["catalog"]).is_file())
+
+    def test_lvgl_provider_is_optional_and_keeps_the_same_business_permissions(self) -> None:
+        component = self.lvgl_component
+        self.assertEqual(component["id"], "keyboard-lvgl")
+        self.assertEqual(component["runtime"], "python")
+        self.assertEqual(component["lifecycle"], "on-demand")
+        self.assertEqual(component["restart"], "never")
+        self.assertLess(
+            component["provides"][0]["priority"],
+            self.component["provides"][0]["priority"],
+        )
+        self.assertEqual(
+            set(component["permissions"]), set(self.component["permissions"])
+        )
+        entry = component["exec"][1]
+        self.assertTrue((ROOT / entry.removeprefix("@package/")).is_file())
 
     def test_entrypoint_and_every_manifest_path_exist(self) -> None:
         entry = self.component["exec"][1]

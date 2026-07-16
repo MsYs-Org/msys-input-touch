@@ -1,12 +1,13 @@
 [project]
 name = "msys-input-touch"
-version = "0.1.17"
+version = "0.2.0"
 description = "Replaceable dependency-free floating touch input method for MSYS"
 requires-python = ">=3.10"
 dependencies = ["msys-sdk>=0.1.6"]
 
 [project.scripts]
 msys-touch-input = "msys_input_touch.service:main"
+msys-touch-input-lvgl = "msys_input_touch.native_bridge:main"
 
 [build-system]
 requires = ["setuptools>=68"]
