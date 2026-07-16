@@ -26,10 +26,9 @@ def mode_locale(mode: str) -> str:
 class ControlEvent:
     action: str
     mode: str
-    # A navigation/lifecycle dismissal must not focus an application which the
-    # user has just left.  Ordinary explicit hide keeps the historic focus
-    # restore behavior for a second Back/key interaction.
-    restore_target: bool = True
+    # The keyboard does not own application focus. Restoring an old field
+    # during hide emits FocusIn and reopens the panel through the SDK hook.
+    restore_target: bool = False
     reason: str = "requested"
 
 
@@ -47,7 +46,7 @@ class InputMethodControl:
         self._backend_name = "unavailable"
         self._backend_available = False
         self._has_focus_target = False
-        self._last_hide_restore_target = True
+        self._last_hide_restore_target = False
         self._last_hide_reason = "requested"
 
     def set_runtime_status(
@@ -76,7 +75,7 @@ class InputMethodControl:
     def local_hide(
         self,
         *,
-        restore_target: bool = True,
+        restore_target: bool = False,
         reason: str = "local",
     ) -> ControlEvent:
         with self._lock:
@@ -157,7 +156,11 @@ class InputMethodControl:
             return self.snapshot(), None
         if operation not in {"show", "hide", "toggle", "set_mode"}:
             raise ValueError(f"unknown method {operation}")
-        allowed = {"mode"} if operation in {"show", "toggle", "set_mode"} else set()
+        allowed = (
+            {"mode"}
+            if operation in {"show", "toggle", "set_mode"}
+            else {"reason", "restore_target"}
+        )
         unknown = sorted(set(payload) - allowed)
         if unknown:
             raise ValueError(f"unknown payload fields: {', '.join(unknown)}")
@@ -169,6 +172,24 @@ class InputMethodControl:
             normalized_mode = str(requested_mode).strip().lower()
             if normalized_mode not in INPUT_MODES:
                 raise ValueError(f"unsupported input mode: {requested_mode}")
+        has_requested_restore_target = "restore_target" in payload
+        requested_restore_target = payload.get("restore_target")
+        if (
+            operation == "hide"
+            and has_requested_restore_target
+            and not isinstance(requested_restore_target, bool)
+        ):
+            raise ValueError("restore_target must be a boolean")
+        has_requested_reason = "reason" in payload
+        requested_reason = payload.get("reason")
+        if operation == "hide" and has_requested_reason:
+            if (
+                not isinstance(requested_reason, str)
+                or not requested_reason.strip()
+                or len(requested_reason) > 64
+            ):
+                raise ValueError("reason must be a non-empty string of at most 64 characters")
+            requested_reason = requested_reason.strip()
         with self._lock:
             if normalized_mode is not None:
                 self._mode = normalized_mode
@@ -176,15 +197,20 @@ class InputMethodControl:
                 self._composition = ""
             if operation == "show":
                 self._visible = True
-                self._last_hide_restore_target = True
+                self._last_hide_restore_target = False
                 self._last_hide_reason = "requested"
                 event = ControlEvent("show", self._mode, reason="requested")
             elif operation == "hide":
                 was_visible = self._visible
                 self._visible = False
                 self._composition = ""
-                if was_visible:
-                    self._last_hide_restore_target = True
+                if has_requested_restore_target:
+                    self._last_hide_restore_target = requested_restore_target
+                elif was_visible:
+                    self._last_hide_restore_target = False
+                if has_requested_reason:
+                    self._last_hide_reason = requested_reason
+                elif was_visible:
                     self._last_hide_reason = "requested"
                 event = ControlEvent(
                     "hide",
@@ -195,17 +221,17 @@ class InputMethodControl:
             elif operation == "toggle":
                 self._visible = not self._visible
                 if self._visible:
-                    self._last_hide_restore_target = True
+                    self._last_hide_restore_target = False
                     self._last_hide_reason = "requested"
                 else:
                     self._composition = ""
-                    self._last_hide_restore_target = True
+                    self._last_hide_restore_target = False
                     self._last_hide_reason = "requested"
                 event = ControlEvent(
                     "show" if self._visible else "hide",
                     self._mode,
                     restore_target=(
-                        True if self._visible else self._last_hide_restore_target
+                        False if self._visible else self._last_hide_restore_target
                     ),
                     reason="requested",
                 )

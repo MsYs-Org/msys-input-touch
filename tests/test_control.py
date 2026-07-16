@@ -22,8 +22,10 @@ class InputMethodControlTests(unittest.TestCase):
         hidden, event = control.handle("toggle", {})
         self.assertFalse(hidden["visible"])
         self.assertEqual(event.action, "hide")
+        self.assertFalse(event.restore_target)
         hidden, event = control.handle("hide", {})
         self.assertFalse(hidden["visible"])
+        self.assertFalse(event.restore_target)
 
     def test_layout_and_runtime_status_are_explicit(self) -> None:
         control = InputMethodControl()
@@ -71,6 +73,43 @@ class InputMethodControlTests(unittest.TestCase):
         _result, repeated_hide = control.handle("hide", {})
         self.assertFalse(repeated_hide.restore_target)
         self.assertEqual(repeated_hide.reason, "outside-primary-press")
+
+    def test_navigation_hide_never_restores_or_reopens_the_old_target(self) -> None:
+        control = InputMethodControl(mode="zh")
+        control.handle("show", {})
+
+        result, event = control.handle(
+            "hide",
+            {"restore_target": False, "reason": "navigation-back"},
+        )
+
+        self.assertFalse(result["visible"])
+        self.assertIsNotNone(event)
+        assert event is not None
+        self.assertFalse(event.restore_target)
+        self.assertEqual(event.reason, "navigation-back")
+        _result, repeated = control.handle("hide", {})
+        self.assertFalse(repeated.restore_target)
+        self.assertEqual(repeated.reason, "navigation-back")
+
+        for payload in (
+            {"restore_target": 0},
+            {"restore_target": None},
+            {"reason": ""},
+            {"reason": None},
+            {"reason": "x" * 65},
+        ):
+            with self.subTest(payload=payload), self.assertRaises(ValueError):
+                control.handle("hide", payload)
+
+    def test_local_hide_defaults_to_no_focus_restore(self) -> None:
+        control = InputMethodControl()
+        control.handle("show", {})
+
+        event = control.local_hide()
+
+        self.assertFalse(event.restore_target)
+        self.assertEqual(event.reason, "local")
 
 
 if __name__ == "__main__":

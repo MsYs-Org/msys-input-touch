@@ -1,11 +1,13 @@
 # MSYS Touch Input
 
-Current source version: `0.1.16`.
+Current source version: `0.1.17`.
 
-Version 0.1.16 moves the non-Tk focus probe to the very beginning of a cold
-generation, before importing Tk, opening the host window, loading fonts, or
-parsing the Pinyin dictionary. Those startup costs now overlap the window
-manager lookup rather than preceding it.
+Version 0.1.17 gives navigation dismissal an explicit no-focus-restore
+contract, so Back cannot immediately reopen the keyboard through the old
+editable target. Version 0.1.16 moved the non-Tk focus probe to the beginning
+of a cold generation, before importing Tk, opening the host window, loading
+fonts, or parsing the Pinyin dictionary. Those startup costs now overlap the
+window manager lookup rather than preceding it.
 
 Version 0.1.15 overlaps the first generation-checked focus lookup with the
 component hello/ready handshake and prepares the still-withdrawn stable Tk
