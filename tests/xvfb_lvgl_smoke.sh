@@ -20,6 +20,7 @@ run_case() {
     xvfb_pid=$!
     sleep 0.25
     DISPLAY="$display" "$binary" --display "$display" --output spi --visible \
+        --ui "$root/ui/keyboard.xml" \
         --x "$x" --y "$y" --width "$width" --height "$height" \
         --run-ms 2100 </dev/null >"$tmp/app.log" 2>&1 &
     app_pid=$!

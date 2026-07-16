@@ -1,6 +1,14 @@
 # MSYS Touch Input
 
-Current source version: `0.2.0`.
+Current source version: `0.3.0`.
+
+Version 0.3.0 moves the LVGL panel skeleton to a package-owned dynamic XML
+document and makes the shared light palette the default.  C still creates the
+variable key rows and candidates and owns input events; XML owns the header,
+composition strip, scrollable candidate slot and key slot.  The old compiled
+layout remains a fallback when no `--ui` path is supplied.  The dynamic panel
+measures about 6.0 MiB PSS on the 320x480 AArch64 target and remains idle with
+zero periodic flushes.
 
 Version 0.2.0 adds an optional `keyboard-lvgl` provider while retaining the
 existing Python/Tk `keyboard` as the higher-priority default.  The optional

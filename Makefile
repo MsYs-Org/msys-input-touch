@@ -27,8 +27,9 @@ $(TARGET): $(SOURCES) $(UI_LIBRARY)
 		$(UI_LIBRARY) -o $@ $(LDLIBS)
 
 stage: all
-	@mkdir -p files/bin files/share/licenses/lvgl files/share/licenses/fonts
+	@mkdir -p files/bin files/share/ui files/share/licenses/lvgl files/share/licenses/fonts
 	install -m 0755 $(TARGET) files/bin/msys-input-touch-lvgl
+	cp ui/keyboard.xml files/share/ui/
 	cp $(UI_ROOT)/vendor/lvgl/LICENCE.txt files/share/licenses/lvgl/
 	cp $(UI_ROOT)/fonts/NotoSansSC.LICENSE.txt files/share/licenses/fonts/
 
@@ -40,4 +41,4 @@ aarch64-build:
 
 clean:
 	rm -rf $(BUILD_DIR) files/bin files/share/licenses/lvgl \
-		files/share/licenses/fonts
+		files/share/licenses/fonts files/share/ui

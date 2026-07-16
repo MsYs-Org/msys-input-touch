@@ -3,7 +3,7 @@
   "package": {
     "id": "org.msys.input.touch",
     "name": "MSYS Touch Input",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "kind": "system",
     "vendor": "MSYS",
     "summary": "Replaceable floating touch keyboard with bounded Pinyin candidates",
@@ -56,7 +56,7 @@
     },
     {
       "id": "keyboard-lvgl",
-      "name": "Touch keyboard (LVGL preview)",
+      "name": "Touch keyboard (LVGL dynamic)",
       "runtime": "python",
       "exec": ["python", "@package/files/app/lvgl_main.py"],
       "lifecycle": "on-demand",

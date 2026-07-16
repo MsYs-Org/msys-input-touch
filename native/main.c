@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 
 #include "msys/mipc.h"
+#include "msys_ui/document.h"
 #include "msys_ui/fonts.h"
 #include "msys_ui/runtime.h"
 #include "msys_ui/theme.h"
@@ -32,6 +33,7 @@ struct keyboard {
     msys_ui_runtime_t *runtime;
     msys_ui_surface_t *surface;
     msys_ui_theme_t *theme;
+    msys_ui_document_t *document;
     const msys_ui_anim_policy_t *policy;
     lv_obj_t *screen;
     lv_obj_t *mode_label;
@@ -153,9 +155,12 @@ static lv_obj_t *add_key(keyboard_t *keyboard, lv_obj_t *row,
     lv_obj_set_height(button, LV_PCT(100));
     lv_obj_set_flex_grow(button, weight);
     lv_obj_set_style_pad_all(button, 1, LV_PART_MAIN);
-    if(accent)
-        lv_obj_set_style_bg_color(button, lv_color_hex(0x4869a8),
-                                  LV_PART_MAIN);
+    lv_obj_set_style_bg_color(button,
+                              lv_color_hex(accent ? 0x3f66e8 : 0xedf1f7),
+                              LV_PART_MAIN);
+    lv_obj_set_style_text_color(button,
+                                lv_color_hex(accent ? 0xffffff : 0x182033),
+                                LV_PART_MAIN);
     text = lv_label_create(button);
     lv_label_set_text(text, label);
     font(keyboard, text, 14);
@@ -316,6 +321,10 @@ static void update_candidates(keyboard_t *keyboard, const char *json)
         lv_obj_add_style(button, msys_ui_theme_button(keyboard->theme),
                          LV_PART_MAIN);
         lv_obj_set_size(button, LV_SIZE_CONTENT, 30);
+        lv_obj_set_style_bg_color(button, lv_color_hex(0xe9eef8),
+                                  LV_PART_MAIN);
+        lv_obj_set_style_text_color(button, lv_color_hex(0x182033),
+                                    LV_PART_MAIN);
         label = lv_label_create(button);
         lv_label_set_text(label, values[index]);
         font(keyboard, label, 16);
@@ -424,7 +433,7 @@ static void hide_key_cb(lv_event_t *event)
     key_event_cb(event);
 }
 
-static void build_ui(keyboard_t *keyboard)
+static void build_ui_legacy(keyboard_t *keyboard)
 {
     lv_obj_t *header;
     lv_obj_t *title;
@@ -433,7 +442,7 @@ static void build_ui(keyboard_t *keyboard)
     lv_obj_t *composition_row;
     key_view_t *hide_view;
     keyboard->screen = msys_ui_surface_screen(keyboard->surface);
-    lv_obj_set_style_bg_color(keyboard->screen, lv_color_hex(0x10141b),
+    lv_obj_set_style_bg_color(keyboard->screen, lv_color_hex(0xf5f7fb),
                               LV_PART_MAIN);
     lv_obj_set_style_bg_opa(keyboard->screen, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_pad_all(keyboard->screen, 3, LV_PART_MAIN);
@@ -474,7 +483,7 @@ static void build_ui(keyboard_t *keyboard)
     lv_obj_set_width(keyboard->composition, 64);
     lv_label_set_long_mode(keyboard->composition, LV_LABEL_LONG_DOT);
     font(keyboard, keyboard->composition, 14);
-    lv_obj_set_style_text_color(keyboard->composition, lv_color_hex(0x9bc5ff),
+    lv_obj_set_style_text_color(keyboard->composition, lv_color_hex(0x315bb5),
                                 LV_PART_MAIN);
     keyboard->candidates = lv_obj_create(composition_row);
     lv_obj_remove_style_all(keyboard->candidates);
@@ -496,12 +505,78 @@ static void build_ui(keyboard_t *keyboard)
     lv_label_set_text(keyboard->composition, "拼音");
 }
 
+static int document_bind_cb(lv_xml_component_scope_t *scope, void *user_data)
+{
+    keyboard_t *keyboard = user_data;
+    if(scope == NULL || keyboard == NULL || keyboard->theme == NULL) return -1;
+    if(lv_xml_register_font(scope, "msys_14",
+                            msys_ui_theme_font(keyboard->theme, 14)) != LV_RESULT_OK ||
+       lv_xml_register_font(scope, "msys_16",
+                            msys_ui_theme_font(keyboard->theme, 16)) != LV_RESULT_OK)
+        return -1;
+    return 0;
+}
+
+static lv_obj_t *find_named(lv_obj_t *root, const char *name)
+{
+    uint32_t index;
+    uint32_t count;
+    lv_obj_t *match;
+    const char *object_name;
+    if(root == NULL || name == NULL) return NULL;
+    object_name = lv_obj_get_name(root);
+    if(object_name != NULL && strcmp(object_name, name) == 0) return root;
+    count = lv_obj_get_child_count(root);
+    for(index = 0U; index < count; index++) {
+        match = find_named(lv_obj_get_child(root, (int32_t)index), name);
+        if(match != NULL) return match;
+    }
+    return NULL;
+}
+
+static bool build_ui_document(keyboard_t *keyboard, const char *path)
+{
+    msys_ui_document_config_t config = {
+        .bind = document_bind_cb,
+        .user_data = keyboard,
+    };
+    lv_obj_t *hide;
+    lv_obj_t *surface_screen = msys_ui_surface_screen(keyboard->surface);
+    keyboard->document = msys_ui_document_create(surface_screen, &config);
+    if(keyboard->document == NULL ||
+       msys_ui_document_load_file(keyboard->document, path) !=
+           MSYS_UI_DOCUMENT_OK)
+        return false;
+    keyboard->screen = msys_ui_document_root(keyboard->document);
+    keyboard->mode_label = find_named(keyboard->screen, "mode");
+    keyboard->composition = find_named(keyboard->screen, "composition");
+    keyboard->candidates = find_named(keyboard->screen, "candidates");
+    keyboard->keys = find_named(keyboard->screen, "keys");
+    hide = find_named(keyboard->screen, "hide");
+    if(keyboard->mode_label == NULL || keyboard->composition == NULL ||
+       keyboard->candidates == NULL || keyboard->keys == NULL || hide == NULL)
+        return false;
+    lv_obj_set_scroll_dir(keyboard->candidates, LV_DIR_HOR);
+    lv_obj_set_scrollbar_mode(keyboard->candidates, LV_SCROLLBAR_MODE_ACTIVE);
+    memset(&keyboard->hide_view, 0, sizeof(keyboard->hide_view));
+    keyboard->hide_view.owner = keyboard;
+    keyboard->hide_view.button = hide;
+    (void)snprintf(keyboard->hide_view.token,
+                   sizeof(keyboard->hide_view.token), "hide");
+    lv_obj_add_event_cb(hide, hide_key_cb, LV_EVENT_ALL,
+                        &keyboard->hide_view);
+    (void)snprintf(keyboard->mode, sizeof(keyboard->mode), "en");
+    rebuild_keys(keyboard);
+    lv_label_set_text(keyboard->composition, "拼音");
+    return true;
+}
+
 static void usage(FILE *stream, const char *argv0)
 {
     fprintf(stream,
             "usage: %s [--display :24] [--output spi|hdmi] [--visible] "
             "[--reduced-motion] [--x N --y N --width N --height N] "
-            "[--run-ms N]\n",
+            "[--ui FILE] [--run-ms N]\n",
             argv0);
 }
 
@@ -523,6 +598,7 @@ int main(int argc, char **argv)
     };
     keyboard_t keyboard;
     bool initially_visible = false;
+    const char *ui_path = NULL;
     int flags;
     int index;
     memset(&keyboard, 0, sizeof(keyboard));
@@ -551,6 +627,8 @@ int main(int argc, char **argv)
             surface_config.width = (uint16_t)atoi(argv[++index]);
         else if(strcmp(argv[index], "--height") == 0 && index + 1 < argc)
             surface_config.height = (uint16_t)atoi(argv[++index]);
+        else if(strcmp(argv[index], "--ui") == 0 && index + 1 < argc)
+            ui_path = argv[++index];
         else if(strcmp(argv[index], "--run-ms") == 0 && index + 1 < argc)
             keyboard.stop_at_ms = monotonic_ms() + strtoull(argv[++index], NULL, 10);
         else {
@@ -579,7 +657,18 @@ int main(int argc, char **argv)
     msys_ui_theme_set_font_provider(keyboard.theme,
                                     msys_ui_font_provider, NULL,
                                     "zh-CN");
-    build_ui(&keyboard);
+    if(ui_path != NULL) {
+        if(!build_ui_document(&keyboard, ui_path)) {
+            fprintf(stderr, "input-lvgl: cannot load dynamic UI %s\n", ui_path);
+            msys_ui_document_destroy(keyboard.document);
+            msys_ui_theme_destroy(keyboard.theme);
+            msys_ui_dynamic_fonts_shutdown();
+            msys_ui_runtime_destroy(keyboard.runtime);
+            return 1;
+        }
+    }
+    else
+        build_ui_legacy(&keyboard);
     flags = fcntl(STDIN_FILENO, F_GETFL, 0);
     if(flags >= 0) (void)fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
     if(initially_visible) {
@@ -597,6 +686,7 @@ int main(int argc, char **argv)
           msys_ui_runtime_step(keyboard.runtime, 20U) > 0) {
         pump_commands(&keyboard);
     }
+    msys_ui_document_destroy(keyboard.document);
     msys_ui_theme_destroy(keyboard.theme);
     msys_ui_dynamic_fonts_shutdown();
     msys_ui_runtime_destroy(keyboard.runtime);

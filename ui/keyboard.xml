@@ -1,0 +1,32 @@
+<component>
+  <view extends="lv_obj" width="100%" height="100%" flex_flow="column"
+        scrollable="false" style_bg_color="#f5f7fb" style_bg_opa="100%"
+        style_border_width="0" style_radius="16" style_pad_all="3"
+        style_pad_row="2">
+    <lv_obj name="header" width="100%" height="30" flex_flow="row"
+            scrollable="false" style_bg_opa="0%" style_border_width="0"
+            style_pad_hor="5" style_pad_ver="0" style_pad_column="6">
+      <lv_label text="触摸键盘" flex_grow="1" style_text_font="msys_16"
+                style_text_color="#182033"/>
+      <lv_label name="mode" text="EN" width="36"
+                style_text_font="msys_14" style_text_color="#657186"/>
+      <lv_button name="hide" width="42" height="28" style_radius="12"
+                 style_bg_color="#3f66e8" style_bg_opa="100%">
+        <lv_label text="⌄" align="center" style_text_font="msys_16"
+                  style_text_color="#ffffff"/>
+      </lv_button>
+    </lv_obj>
+    <lv_obj name="composition-row" width="100%" height="34" flex_flow="row"
+            scrollable="false" style_bg_opa="0%" style_border_width="0"
+            style_pad_all="0" style_pad_column="3">
+      <lv_label name="composition" text="拼音" width="64" long_mode="dots"
+                style_text_font="msys_14" style_text_color="#315bb5"/>
+      <lv_obj name="candidates" height="34" flex_grow="1" flex_flow="row"
+              scrollable="true" style_bg_opa="0%" style_border_width="0"
+              style_pad_all="0" style_pad_column="3"/>
+    </lv_obj>
+    <lv_obj name="keys" width="100%" flex_grow="1" flex_flow="column"
+            scrollable="false" style_bg_opa="0%" style_border_width="0"
+            style_pad_all="0" style_pad_row="2"/>
+  </view>
+</component>

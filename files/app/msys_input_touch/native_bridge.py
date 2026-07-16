@@ -45,6 +45,13 @@ def native_binary() -> Path:
     return Path(__file__).resolve().parents[2] / "bin" / "msys-input-touch-lvgl"
 
 
+def native_ui() -> Path:
+    configured = os.environ.get("MSYS_INPUT_LVGL_UI")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return Path(__file__).resolve().parents[2] / "share" / "ui" / "keyboard.xml"
+
+
 def panel_geometry(screen_width: int, screen_height: int) -> KeyboardGeometry:
     try:
         inset = int(os.environ.get("MSYS_KEYBOARD_BOTTOM_INSET", "42"))
@@ -63,6 +70,7 @@ class NativePresenter:
         events: queue.SimpleQueue[tuple[str, object]],
         *,
         output: str = "spi",
+        ui: Path | None = None,
     ) -> None:
         path = Path(binary).resolve()
         if not path.is_file():
@@ -75,6 +83,8 @@ class NativePresenter:
                 str(path),
                 "--output",
                 "hdmi" if output == "hdmi" else "spi",
+                "--ui",
+                str(Path(ui).resolve() if ui is not None else native_ui()),
                 "--x",
                 str(geometry.x),
                 "--y",
@@ -176,7 +186,9 @@ def run(
     geometry = panel_geometry(root.winfo_screenwidth(), root.winfo_screenheight())
     panel = PanelBounds(geometry.x, geometry.y, geometry.width, geometry.height)
     output = os.environ.get("MSYS_DISPLAY_OUTPUT", "spi")
-    presenter = NativePresenter(native_binary(), geometry, events, output=output)
+    presenter = NativePresenter(
+        native_binary(), geometry, events, output=output, ui=native_ui()
+    )
     presenter.state(model)
 
     visibility_guard = InputVisibilityGuard()
@@ -260,7 +272,7 @@ def run(
                     geometry.x, geometry.y, geometry.width, geometry.height
                 )
                 presenter = NativePresenter(
-                    native_binary(), geometry, events, output=output
+                    native_binary(), geometry, events, output=output, ui=native_ui()
                 )
                 presenter.state(model)
             hidden_gate.cancel()
