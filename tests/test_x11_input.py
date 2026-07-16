@@ -75,8 +75,11 @@ class X11InputAdapterTests(unittest.TestCase):
         self.assertNotIn("shell=True", source)
         self.assertNotIn("os.system", source)
         self.assertNotIn("XSetInputFocus", source)
+        # XGetInputFocus can return a toolkit child for Qt, Tk or Chromium.
+        # The XTest path must normalize it to the catalogued top-level XID.
+        self.assertIn("XQueryTree", source)
+        self.assertIn("parent.value == root.value", source)
 
 
 if __name__ == "__main__":
     unittest.main()
-

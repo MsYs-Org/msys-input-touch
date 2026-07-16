@@ -1,6 +1,14 @@
 # MSYS Touch Input
 
-Current source version: `0.3.0`.
+Current source version: `0.4.0`.
+
+Version 0.4.0 makes `keyboard-lvgl` the selected `input-method` role provider;
+the Tk presenter remains installed at lower priority as an explicit fallback.
+The existing generation-checked focus capture and stable focus-loss guard are
+shared unchanged, so Tk, Qt and Electron top-level X11 windows use the same
+show, outside-touch dismissal and injection path. While visible, a live X11
+screen-size change rebuilds only the fixed-size LVGL child surface and keeps
+the model, real Pinyin candidates, clipboard owner and focus generation alive.
 
 Version 0.3.0 moves the LVGL panel skeleton to a package-owned dynamic XML
 document and makes the shared light palette the default.  C still creates the
@@ -10,8 +18,8 @@ layout remains a fallback when no `--ui` path is supplied.  The dynamic panel
 measures about 6.0 MiB PSS on the 320x480 AArch64 target and remains idle with
 zero periodic flushes.
 
-Version 0.2.0 adds an optional `keyboard-lvgl` provider while retaining the
-existing Python/Tk `keyboard` as the higher-priority default.  The optional
+Version 0.2.0 added an optional `keyboard-lvgl` provider while retaining the
+existing Python/Tk `keyboard` as the then higher-priority default. The
 provider uses a small C/LVGL window connected to a Python business bridge:
 focus capture, lifecycle dismissal, the bounded Pinyin model, XTest/xdotool
 injection and the hidden Tk clipboard owner stay unchanged.  This preserves
@@ -124,11 +132,13 @@ MsysClient.public_call("role:input-method", "hide", {}, timeout=3)
 ```
 
 X11 has no safe cross-toolkit signal that distinguishes a text widget from a
-non-text widget inside the same foreign application window. A pointer press
-outside the floating panel is therefore treated as leaving edit mode. Apps
-that support switching directly between text fields should issue `show` again
-from their own field-focus callback; this keeps the role equally usable from
-Tk, Qt, Electron, and native X11 without a framework-specific input bus.
+non-text widget inside the same foreign application window. The SDK Tk binding
+therefore maps widget FocusIn/FocusOut to role `show`/`hide`; Qt and Electron
+applications do the same from their ordinary field-focus callbacks. Once
+shown, the provider captures the framework-independent top-level XID and
+automatically closes after stable focus loss, target lifecycle termination, or
+a pointer press outside the panel. This avoids a framework-specific input bus
+and avoids showing a keyboard for every non-editable application window.
 
 Declare `mipc.call:role:input-method` in the calling component. Do not address
 `org.msys.input.touch:keyboard` directly: role selection is what keeps the IME

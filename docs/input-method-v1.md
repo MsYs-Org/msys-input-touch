@@ -49,7 +49,9 @@ restore, when one of these observable conditions occurs:
 - a matching `msys.lifecycle.transition` announces `closing`, `closed`, or
   `failed` for the target component/identity.
 
-The component has no Core RPC idle timeout because the user can type for a
+The default provider is `org.msys.input.touch:keyboard-lvgl`; the Tk provider
+is retained as a lower-priority fallback. The component has no Core RPC idle
+timeout because the user can type for a
 long time without another RPC. Instead it exits normally shortly after a hide
 animation, preserving true `on-demand` memory behavior. X11 cannot expose a
 portable semantic "this is a text control" signal for arbitrary Tk/Qt/Electron
@@ -59,11 +61,15 @@ must treat the next role call as the wake-up path, rather than respawning an
 intentionally hidden keyboard after its control socket closes.
 
 An explicit component `start` does not map a keyboard. The stock provider
-releases that initial hidden generation after 750 ms unless a valid `show`
-request arrives. A `show` without a generation-checked focus target is rejected
+releases that initial hidden generation after the configured bounded warm
+grace unless a valid `show` request arrives. A `show` without a
+generation-checked focus target is rejected
 back into the same hidden-release path, and every Home/focus-loss hide re-arms
 that release timer.
 
-The contract is toolkit-neutral. A future Qt, C/C++, Electron, Wayland, or
-hardware-keyboard implementation can replace this provider without changing
-application calls.
+The contract is toolkit-neutral. Tk SDK focus bindings and Qt/Electron field
+focus callbacks all call the same role. X11 child focus is normalized to the
+catalogued top-level window before injection, and a live portrait/landscape
+screen-size change reconfigures only the LVGL surface. A future Qt, C/C++,
+Electron, Wayland, or hardware-keyboard implementation can replace this
+provider without changing application calls.

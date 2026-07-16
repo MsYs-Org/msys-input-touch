@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from msys_input_touch.geometry import clamp_panel_position, keyboard_geometry
 
@@ -25,6 +26,16 @@ class KeyboardGeometryTests(unittest.TestCase):
     def test_drag_is_clamped_to_live_screen(self) -> None:
         self.assertEqual(clamp_panel_position(-20, 999, 300, 200, 320, 480), (0, 280))
         self.assertEqual(clamp_panel_position(10, 20, 300, 200, 320, 480), (10, 20))
+
+    def test_lvgl_bridge_reconfigures_a_visible_surface_after_rotation(self) -> None:
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "files/app/msys_input_touch/native_bridge.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("def refresh_presenter_geometry", source)
+        self.assertIn("refresh_presenter_geometry(show_after=False)", source)
+        self.assertIn("refresh_presenter_geometry(show_after=True)", source)
+        self.assertIn("presenter.state(model)", source)
 
 
 if __name__ == "__main__":

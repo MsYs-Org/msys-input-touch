@@ -63,6 +63,20 @@ class FocusPolicyTests(unittest.TestCase):
         bad["payload"]["windows"][0]["id"] = "0x2a"
         self.assertIsNone(target_from_window_list(0x2A, bad))
 
+    def test_qt_tk_and_electron_identities_share_the_top_level_x11_contract(self) -> None:
+        for identity in (
+            "org.example.QtEditor",
+            "org.example.tk-editor",
+            "org.example.electron-editor",
+        ):
+            with self.subTest(identity=identity):
+                response = window_response()
+                response["payload"]["windows"][0]["identity"] = identity
+                target = target_from_window_list(0x2A, response)
+                self.assertIsNotNone(target)
+                assert target is not None
+                self.assertEqual(target.identity, identity)
+
     def test_system_chrome_and_other_overlays_never_replace_text_target(self) -> None:
         for role in (
             "system-chrome",

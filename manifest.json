@@ -3,7 +3,7 @@
   "package": {
     "id": "org.msys.input.touch",
     "name": "MSYS Touch Input",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "kind": "system",
     "vendor": "MSYS",
     "summary": "Replaceable floating touch keyboard with bounded Pinyin candidates",
@@ -16,7 +16,7 @@
   "components": [
     {
       "id": "keyboard",
-      "name": "Touch keyboard",
+      "name": "Touch keyboard (Tk fallback)",
       "runtime": "tk",
       "exec": ["python", "@package/files/app/main.py"],
       "lifecycle": "on-demand",
@@ -51,8 +51,9 @@
       ],
       "isolation": "baseline",
       "provides": [
-        {"role": "input-method", "exclusive": true, "priority": 50}
-      ]
+        {"role": "input-method", "exclusive": true, "priority": 10}
+      ],
+      "x-msys-ui-provider": {"id": "tk", "default": false}
     },
     {
       "id": "keyboard-lvgl",
@@ -91,8 +92,13 @@
       ],
       "isolation": "baseline",
       "provides": [
-        {"role": "input-method", "exclusive": true, "priority": 40}
-      ]
+        {"role": "input-method", "exclusive": true, "priority": 100}
+      ],
+      "x-msys-ui-provider": {
+        "id": "lvgl",
+        "default": true,
+        "fallback_component": "org.msys.input.touch:keyboard"
+      }
     }
   ]
 }

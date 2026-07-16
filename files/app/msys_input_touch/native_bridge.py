@@ -225,6 +225,35 @@ def run(
         )
         presenter.state(model)
 
+    def refresh_presenter_geometry(*, show_after: bool) -> bool:
+        """Recreate only the LVGL surface when live X11 geometry changes.
+
+        XRandR updates the Tk screen dimensions for normal/right/left display
+        layouts.  The business process, focus target, composer and clipboard
+        owner stay alive; only the fixed-size override-redirect surface is
+        replaced because X11/LVGL surfaces are intentionally immutable-sized.
+        """
+
+        nonlocal geometry, panel, presenter
+        updated = panel_geometry(root.winfo_screenwidth(), root.winfo_screenheight())
+        if updated == geometry:
+            return False
+        presenter.close()
+        geometry = updated
+        panel = PanelBounds(geometry.x, geometry.y, geometry.width, geometry.height)
+        presenter = NativePresenter(
+            native_binary(), geometry, events, output=output, ui=native_ui()
+        )
+        presenter.state(model)
+        if show_after:
+            presenter.send({"type": "show"})
+        print(
+            "input-method-lvgl: geometry "
+            f"{geometry.width}x{geometry.height}+{geometry.x}+{geometry.y}",
+            flush=True,
+        )
+        return True
+
     def request_exit() -> None:
         if standalone:
             root.destroy()
@@ -258,23 +287,11 @@ def run(
         root.after(hidden_exit_delay_ms(), release)
 
     def apply_event(event: ControlEvent) -> None:
-        nonlocal geometry, panel, presenter, visibility_revision
+        nonlocal visibility_revision
         model.set_mode(event.mode)
         send_state()
         if event.action == "show":
-            updated = panel_geometry(
-                root.winfo_screenwidth(), root.winfo_screenheight()
-            )
-            if updated != geometry:
-                presenter.close()
-                geometry = updated
-                panel = PanelBounds(
-                    geometry.x, geometry.y, geometry.width, geometry.height
-                )
-                presenter = NativePresenter(
-                    native_binary(), geometry, events, output=output, ui=native_ui()
-                )
-                presenter.state(model)
+            refresh_presenter_geometry(show_after=False)
             hidden_gate.cancel()
             with revision_lock:
                 visibility_revision += 1
@@ -392,6 +409,9 @@ def run(
 
     def poll_visibility() -> None:
         if visibility_guard.active:
+            # Rotation is a live layout change, not a display crash.  Keep the
+            # model/focus generation and replace only the fixed-size surface.
+            refresh_presenter_geometry(show_after=True)
             decision = visibility_guard.observe(
                 target=focus.target,
                 focused_xid=focused_window(),
