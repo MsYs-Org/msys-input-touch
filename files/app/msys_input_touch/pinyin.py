@@ -10,9 +10,9 @@ from typing import Mapping
 
 
 DICTIONARY_SCHEMA = "msys.pinyin-dictionary.v1"
-MAX_DICTIONARY_ENTRIES = 2048
-MAX_CANDIDATES_PER_ENTRY = 16
-MAX_CANDIDATES_SHOWN = 8
+MAX_DICTIONARY_ENTRIES = 4096
+MAX_CANDIDATES_PER_ENTRY = 48
+MAX_CANDIDATES_SHOWN = 32
 MAX_PINYIN_LENGTH = 24
 MAX_CANDIDATE_LENGTH = 16
 _PINYIN_KEY = re.compile(r"[a-z]+(?:'[a-z]+)*")
@@ -107,6 +107,8 @@ class PinyinDictionary:
         key = str(pinyin or "").strip().lower()
         bound = min(MAX_CANDIDATES_SHOWN, max(1, int(limit)))
         exact = self.entries.get(key)
+        if exact is None and "'" in key:
+            exact = self.entries.get(key.replace("'", ""))
         if exact is not None:
             return exact[:bound]
         if not key:
@@ -183,4 +185,3 @@ __all__ = [
     "PinyinDictionaryError",
     "load_dictionary",
 ]
-

@@ -7,6 +7,7 @@ import unittest
 
 from msys_input_touch.pinyin import (
     MAX_CANDIDATES_PER_ENTRY,
+    MAX_CANDIDATES_SHOWN,
     MAX_DICTIONARY_ENTRIES,
     MAX_PINYIN_LENGTH,
     PinyinComposer,
@@ -31,8 +32,17 @@ class PinyinDictionaryTests(unittest.TestCase):
     def test_packaged_dictionary_is_bounded_and_useful(self) -> None:
         dictionary = load_dictionary()
         self.assertLessEqual(len(dictionary.entries), MAX_DICTIONARY_ENTRIES)
+        self.assertGreaterEqual(len(dictionary.entries), 4000)
         self.assertEqual(dictionary.candidates("nihao"), ("你好",))
         self.assertEqual(dictionary.candidates("shurufa"), ("输入法",))
+        self.assertEqual(dictionary.candidates("xianzai")[:1], ("现在",))
+        for syllable in ("ni", "shi", "yi"):
+            with self.subTest(syllable=syllable):
+                self.assertGreater(len(dictionary.candidates(syllable)), 16)
+                self.assertLessEqual(
+                    len(dictionary.candidates(syllable)), MAX_CANDIDATES_SHOWN
+                )
+        self.assertEqual(dictionary.candidates("pengyou")[:1], ("朋友",))
         self.assertTrue(all(
             len(candidates) <= MAX_CANDIDATES_PER_ENTRY
             for candidates in dictionary.entries.values()
@@ -42,6 +52,7 @@ class PinyinDictionaryTests(unittest.TestCase):
         dictionary = PinyinDictionary.from_mapping(document())
         self.assertEqual(dictionary.candidates("ni"), ("你", "呢"))
         self.assertEqual(dictionary.candidates("nih"), ("你好",))
+        self.assertEqual(dictionary.candidates("ni'hao"), ("你好",))
         self.assertEqual(dictionary.candidates("missing"), ())
         with self.assertRaises(TypeError):
             dictionary.entries["x"] = ("下",)  # type: ignore[index]
@@ -90,4 +101,3 @@ class PinyinDictionaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

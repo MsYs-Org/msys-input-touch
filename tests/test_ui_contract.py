@@ -143,7 +143,7 @@ class TouchUiContractTests(unittest.TestCase):
     def test_lvgl_candidates_come_only_from_the_bounded_pinyin_model(self) -> None:
         bridge = (PACKAGE / "native_bridge.py").read_text(encoding="utf-8")
         native = (ROOT / "native/main.c").read_text(encoding="utf-8")
-        self.assertIn('"candidates": list(model.candidates[:8])', bridge)
+        self.assertIn('"candidates": list(model.candidates[:32])', bridge)
         self.assertIn('msys_mipc_json_get_raw(json, "candidates"', native)
         self.assertNotIn("fake_candidate", bridge.lower())
         self.assertNotIn("fake_candidate", native.lower())

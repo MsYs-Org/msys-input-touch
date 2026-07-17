@@ -77,6 +77,22 @@ class InputMethodManifestTests(unittest.TestCase):
         })
         self.assertTrue((ROOT / metadata["catalog"]).is_file())
 
+    def test_generated_dictionary_keeps_upstream_attribution(self) -> None:
+        license_root = ROOT / "files/share/licenses/rime-pinyin-simp"
+        self.assertTrue((license_root / "LICENSE").is_file())
+        self.assertTrue((license_root / "AUTHORS").is_file())
+        dictionary = json.loads(
+            (ROOT / "files/share/pinyin/basic.json").read_text(encoding="utf-8")
+        )
+        source = dictionary["source"]
+        self.assertEqual(source["license"], "Apache-2.0")
+        self.assertEqual(len(source["sha256"]), 64)
+        self.assertEqual(dictionary["limits"], {
+            "entries": 4096,
+            "candidates_per_entry": 48,
+        })
+        self.assertIn("single-syllable", dictionary["selection"])
+
     def test_lvgl_provider_is_default_and_keeps_the_same_business_permissions(self) -> None:
         component = self.lvgl_component
         self.assertEqual(component["id"], "keyboard-lvgl")

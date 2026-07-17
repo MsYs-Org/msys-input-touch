@@ -1,6 +1,22 @@
 # MSYS Touch Input
 
-Current source version: `0.4.4`.
+Current source version: `0.4.5`.
+
+Version 0.4.5 makes the light LVGL panel movable by dragging its header. The
+native window clamps each move to the live X11 screen and reports the new
+coordinates over the existing line protocol, so the Python focus guard updates
+its `PanelBounds` without recreating the window or losing composition. The
+candidate strip now exposes up to 32 horizontally scrollable choices.
+
+The packaged 4,096-entry lexicon is generated deterministically from the
+already downloaded Apache-2.0 `rime-pinyin-simp` dictionary plus the small MSYS
+system vocabulary. Selection keeps the seed first, then every legal upstream
+single-syllable key for basic Hanzi coverage, and fills the remaining slots by
+upstream weight. Each key retains at most 48 candidates while the UI shows at
+most 32 at once. The runtime still performs one bounded JSON load. `LICENSE` and
+`AUTHORS`, the pinned revision and source SHA-256 are shipped with the package.
+The frontend is rebuilt against `msys-ui-lvgl` 0.3.10, whose vector-font lookup
+follows the installed package's atomic `current.json` pointer.
 
 Version 0.4.4 rebuilds the optional native LVGL provider against the shared
 `msys-ui-lvgl` 0.3.9 runtime.  It keeps the Tk provider as an explicit
@@ -131,9 +147,9 @@ focus loss) arms it again.
   X11 clipboard briefly and injects Ctrl+V, which works across Tk, Qt, GTK, and
   Electron more consistently than toolkit-specific preedit APIs.
 - The package-local `msys.pinyin-dictionary.v1` JSON is replaceable through
-  `MSYS_INPUT_DICTIONARY`. It is capped at 2,048 entries, 16 candidates per
-  entry, and short strings; this is an extensibility point, not a claim of a
-  full desktop IME dictionary.
+  `MSYS_INPUT_DICTIONARY`. It is capped at 4,096 entries, 48 stored candidates
+  per entry, 32 visible candidates, and short strings; this remains a bounded
+  embedded IME rather than an unbounded desktop dictionary.
 - Drag updates are clamped to the current screen and coalesced to one geometry
   update per 16 ms. Show/hide uses a short slide without alpha-redrawing the
   entire keyboard, which keeps feedback while reducing SPI damage traffic.

@@ -2,6 +2,8 @@ CC ?= cc
 UI_ROOT ?= ../msys-ui-lvgl
 SDK_ROOT ?= ../msys-sdk
 BUILD_DIR ?= build
+PYTHON ?= python3
+PINYIN_SOURCE ?= ../artifacts/external/rime-pinyin-simp/pinyin_simp.dict.yaml
 
 CPPFLAGS += -I$(UI_ROOT) -I$(UI_ROOT)/include -I$(UI_ROOT)/vendor/lvgl \
 	-I$(SDK_ROOT)/include -DLV_CONF_INCLUDE_SIMPLE
@@ -14,7 +16,7 @@ UI_LIBRARY := $(UI_ROOT)/build/libmsys-ui-lvgl.a
 TARGET := $(BUILD_DIR)/msys-input-touch-lvgl
 SOURCES := native/main.c $(SDK_ROOT)/src/mipc.c
 
-.PHONY: all clean stage probe aarch64-build
+.PHONY: all clean stage probe aarch64-build generate-pinyin
 
 all: $(TARGET)
 
@@ -38,6 +40,9 @@ probe: all
 
 aarch64-build:
 	sh scripts/build_aarch64_j1.sh
+
+generate-pinyin:
+	$(PYTHON) scripts/generate_pinyin_dictionary.py --source $(PINYIN_SOURCE)
 
 clean:
 	rm -rf $(BUILD_DIR) files/bin files/share/licenses/lvgl \

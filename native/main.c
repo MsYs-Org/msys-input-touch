@@ -6,6 +6,7 @@
 #include "msys_ui/runtime.h"
 #include "msys_ui/theme.h"
 
+#include <X11/Xlib.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -17,8 +18,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#define MAX_KEYS 48U
-#define MAX_CANDIDATES 8U
+#define MAX_KEYS 80U
+#define MAX_CANDIDATES 32U
 #define INPUT_BUFFER 16384U
 
 typedef struct keyboard keyboard_t;
@@ -48,6 +49,14 @@ struct keyboard {
     bool shift;
     bool visible;
     bool standalone;
+    bool dragging;
+    int panel_x;
+    int panel_y;
+    int panel_width;
+    int panel_height;
+    int screen_width;
+    int screen_height;
+    lv_point_t drag_anchor;
     uint64_t stop_at_ms;
     char input[INPUT_BUFFER];
     size_t input_used;
@@ -60,6 +69,18 @@ static uint64_t monotonic_ms(void)
     struct timespec now;
     if(clock_gettime(CLOCK_MONOTONIC, &now) != 0) return 0U;
     return (uint64_t)now.tv_sec * 1000U + (uint64_t)now.tv_nsec / 1000000U;
+}
+
+static bool display_size(const char *display_name, int *width, int *height)
+{
+    Display *display = XOpenDisplay(display_name);
+    int screen;
+    if(display == NULL || width == NULL || height == NULL) return false;
+    screen = DefaultScreen(display);
+    *width = DisplayWidth(display, screen);
+    *height = DisplayHeight(display, screen);
+    XCloseDisplay(display);
+    return *width > 0 && *height > 0;
 }
 
 static void signal_cb(int signal_number)
@@ -121,6 +142,63 @@ static void emit_token(const char *token)
     (void)fprintf(stdout, "{\"type\":\"token\",\"token\":%s}\n",
                   escaped);
     (void)fflush(stdout);
+}
+
+static void emit_move(int x, int y)
+{
+    (void)fprintf(stdout, "{\"type\":\"move\",\"x\":%d,\"y\":%d}\n",
+                  x, y);
+    (void)fflush(stdout);
+}
+
+static int clamp_position(int value, int extent, int screen_extent)
+{
+    int maximum = screen_extent > extent ? screen_extent - extent : 0;
+    if(value < 0) return 0;
+    if(value > maximum) return maximum;
+    return value;
+}
+
+static bool event_point(lv_event_t *event, lv_point_t *point)
+{
+    lv_indev_t *indev = lv_event_get_indev(event);
+    if(indev == NULL || point == NULL) return false;
+    lv_indev_get_point(indev, point);
+    return true;
+}
+
+static void header_drag_event_cb(lv_event_t *event)
+{
+    keyboard_t *keyboard = lv_event_get_user_data(event);
+    lv_event_code_t code = lv_event_get_code(event);
+    lv_point_t point;
+    int x;
+    int y;
+    if(keyboard == NULL) return;
+    if(code == LV_EVENT_PRESSED && event_point(event, &point)) {
+        keyboard->drag_anchor = point;
+        keyboard->dragging = true;
+    }
+    else if(code == LV_EVENT_PRESSING && keyboard->dragging &&
+            event_point(event, &point)) {
+        x = clamp_position(keyboard->panel_x + point.x -
+                               keyboard->drag_anchor.x,
+                           keyboard->panel_width, keyboard->screen_width);
+        y = clamp_position(keyboard->panel_y + point.y -
+                               keyboard->drag_anchor.y,
+                           keyboard->panel_height, keyboard->screen_height);
+        if((x != keyboard->panel_x || y != keyboard->panel_y) &&
+           msys_ui_surface_set_geometry(keyboard->surface, x, y,
+                                        (uint16_t)keyboard->panel_width,
+                                        (uint16_t)keyboard->panel_height,
+                                        40U)) {
+            keyboard->panel_x = x;
+            keyboard->panel_y = y;
+            emit_move(x, y);
+        }
+    }
+    else if(code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST)
+        keyboard->dragging = false;
 }
 
 static void key_event_cb(lv_event_t *event)
@@ -455,6 +533,8 @@ static void build_ui_legacy(keyboard_t *keyboard)
     lv_obj_set_style_pad_hor(header, 5, LV_PART_MAIN);
     lv_obj_set_style_pad_gap(header, 6, LV_PART_MAIN);
     lv_obj_set_flex_flow(header, LV_FLEX_FLOW_ROW);
+    lv_obj_add_flag(header, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(header, header_drag_event_cb, LV_EVENT_ALL, keyboard);
     title = lv_label_create(header);
     lv_label_set_text(title, "触摸键盘");
     font(keyboard, title, 16);
@@ -523,6 +603,7 @@ static bool build_ui_document(keyboard_t *keyboard, const char *path)
         .bind = document_bind_cb,
         .user_data = keyboard,
     };
+    lv_obj_t *header;
     lv_obj_t *hide;
     lv_obj_t *surface_screen = msys_ui_surface_screen(keyboard->surface);
     keyboard->document = msys_ui_document_create(surface_screen, &config);
@@ -537,10 +618,14 @@ static bool build_ui_document(keyboard_t *keyboard, const char *path)
     keyboard->candidates = msys_ui_document_find(keyboard->document,
                                                   "candidates");
     keyboard->keys = msys_ui_document_find(keyboard->document, "keys");
+    header = msys_ui_document_find(keyboard->document, "header");
     hide = msys_ui_document_find(keyboard->document, "hide");
     if(keyboard->mode_label == NULL || keyboard->composition == NULL ||
-       keyboard->candidates == NULL || keyboard->keys == NULL || hide == NULL)
+       keyboard->candidates == NULL || keyboard->keys == NULL ||
+       header == NULL || hide == NULL)
         return false;
+    lv_obj_add_flag(header, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(header, header_drag_event_cb, LV_EVENT_ALL, keyboard);
     lv_obj_set_scroll_dir(keyboard->candidates, LV_DIR_HOR);
     lv_obj_set_scrollbar_mode(keyboard->candidates, LV_SCROLLBAR_MODE_ACTIVE);
     memset(&keyboard->hide_view, 0, sizeof(keyboard->hide_view));
@@ -623,6 +708,15 @@ int main(int argc, char **argv)
         }
     }
     if(surface_config.width < 240U || surface_config.height < 148U) return 2;
+    keyboard.panel_x = surface_config.x;
+    keyboard.panel_y = surface_config.y;
+    keyboard.panel_width = surface_config.width;
+    keyboard.panel_height = surface_config.height;
+    if(!display_size(runtime_config.display_name, &keyboard.screen_width,
+                     &keyboard.screen_height)) {
+        keyboard.screen_width = surface_config.x + surface_config.width;
+        keyboard.screen_height = surface_config.y + surface_config.height;
+    }
     keyboard.runtime = msys_ui_runtime_create(&runtime_config);
     if(keyboard.runtime == NULL) return 1;
     (void)msys_ui_dynamic_fonts_init(NULL);

@@ -16,7 +16,7 @@ from msys_sdk import MsysClient
 
 from .control import ControlEvent, InputMethodControl
 from .focus import FocusManager
-from .geometry import KeyboardGeometry, keyboard_geometry
+from .geometry import KeyboardGeometry, clamp_panel_position, keyboard_geometry
 from .lifecycle import (
     HiddenExitGate,
     InputVisibilityGuard,
@@ -37,6 +37,29 @@ from .x11_input import PointerState, create_backend
 
 
 POLL_MS = 45
+
+
+def parse_native_event(packet: object) -> tuple[str, object] | None:
+    if not isinstance(packet, dict):
+        return None
+    if packet.get("type") == "token":
+        token = packet.get("token")
+        if isinstance(token, str) and 0 < len(token) <= 32:
+            return "token", token
+        return None
+    if packet.get("type") == "move":
+        x = packet.get("x")
+        y = packet.get("y")
+        if (
+            isinstance(x, int)
+            and not isinstance(x, bool)
+            and isinstance(y, int)
+            and not isinstance(y, bool)
+            and -32768 <= x <= 32767
+            and -32768 <= y <= 32767
+        ):
+            return "move", (x, y)
+    return None
 
 
 def native_binary() -> Path:
@@ -117,10 +140,9 @@ class NativePresenter:
                     packet = json.loads(line)
                 except (UnicodeError, json.JSONDecodeError):
                     continue
-                if isinstance(packet, dict) and packet.get("type") == "token":
-                    token = packet.get("token")
-                    if isinstance(token, str) and 0 < len(token) <= 32:
-                        self.events.put(("token", token))
+                event = parse_native_event(packet)
+                if event is not None:
+                    self.events.put(event)
         finally:
             if not self._closing:
                 self.events.put(("frontend-exit", self.process.poll()))
@@ -140,7 +162,7 @@ class NativePresenter:
                 "mode": model.mode,
                 "shift": model.shift,
                 "composition": model.composition,
-                "candidates": list(model.candidates[:8]),
+                "candidates": list(model.candidates[:32]),
             }
         )
 
@@ -190,6 +212,7 @@ def run(
     root.withdraw()
     root.update_idletasks()
     geometry = panel_geometry(root.winfo_screenwidth(), root.winfo_screenheight())
+    screen_size = (root.winfo_screenwidth(), root.winfo_screenheight())
     panel = PanelBounds(geometry.x, geometry.y, geometry.width, geometry.height)
     output = os.environ.get("MSYS_DISPLAY_OUTPUT", "spi")
     presenter = NativePresenter(
@@ -240,12 +263,22 @@ def run(
         replaced because X11/LVGL surfaces are intentionally immutable-sized.
         """
 
-        nonlocal geometry, panel, presenter
-        updated = panel_geometry(root.winfo_screenwidth(), root.winfo_screenheight())
-        if updated == geometry:
+        nonlocal geometry, panel, presenter, screen_size
+        current_screen = (root.winfo_screenwidth(), root.winfo_screenheight())
+        if current_screen == screen_size:
             return False
+        updated = panel_geometry(*current_screen)
+        x, y = clamp_panel_position(
+            geometry.x,
+            geometry.y,
+            updated.width,
+            updated.height,
+            *current_screen,
+        )
+        updated = KeyboardGeometry(updated.width, updated.height, x, y)
         presenter.close()
         geometry = updated
+        screen_size = current_screen
         panel = PanelBounds(geometry.x, geometry.y, geometry.width, geometry.height)
         presenter = NativePresenter(
             native_binary(), geometry, events, output=output, ui=native_ui()
@@ -382,6 +415,7 @@ def run(
         root.after(30, pump_results)
 
     def pump_events() -> None:
+        nonlocal geometry, panel
         while True:
             try:
                 kind, payload = events.get_nowait()
@@ -389,6 +423,18 @@ def run(
                 break
             if kind == "token" and isinstance(payload, str):
                 handle_token(payload)
+            elif kind == "move" and isinstance(payload, tuple) and len(payload) == 2:
+                x, y = clamp_panel_position(
+                    int(payload[0]),
+                    int(payload[1]),
+                    geometry.width,
+                    geometry.height,
+                    *screen_size,
+                )
+                geometry = KeyboardGeometry(
+                    geometry.width, geometry.height, x, y
+                )
+                panel = PanelBounds(x, y, geometry.width, geometry.height)
             elif kind == "captured" and isinstance(payload, tuple):
                 revision, target = payload
                 with revision_lock:
@@ -507,4 +553,11 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-__all__ = ["NativePresenter", "main", "native_binary", "panel_geometry", "run"]
+__all__ = [
+    "NativePresenter",
+    "main",
+    "native_binary",
+    "panel_geometry",
+    "parse_native_event",
+    "run",
+]
