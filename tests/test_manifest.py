@@ -83,6 +83,10 @@ class InputMethodManifestTests(unittest.TestCase):
         self.assertEqual(component["runtime"], "python")
         self.assertEqual(component["lifecycle"], "on-demand")
         self.assertEqual(component["restart"], "never")
+        self.assertEqual(component["readiness"], {
+            "mode": "mipc-ready",
+            "timeout_ms": 12000,
+        })
         self.assertGreater(
             component["provides"][0]["priority"],
             self.component["provides"][0]["priority"],

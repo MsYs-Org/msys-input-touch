@@ -1,6 +1,13 @@
 # MSYS Touch Input
 
-Current source version: `0.4.2`.
+Current source version: `0.4.3`.
+
+Version 0.4.3 gives the native LVGL provider a 12-second cold-start readiness
+budget.  The provider loads the CJK font, XML document, X11 surface and Python
+control bridge before announcing readiness; a loaded target exceeded the old
+5-second generic Tk fallback budget during an install health gate even though
+the same generation became healthy when retried.  This changes only the
+bounded supervisor deadline and adds no retry loop or runtime polling.
 
 Version 0.4.2 starts the native frontend's bounded `--run-ms` preview clock
 after XML, fonts, and the initial show request are prepared. On a busy target,

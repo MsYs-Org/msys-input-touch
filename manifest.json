@@ -3,7 +3,7 @@
   "package": {
     "id": "org.msys.input.touch",
     "name": "MSYS Touch Input",
-    "version": "0.4.2",
+    "version": "0.4.3",
     "kind": "system",
     "vendor": "MSYS",
     "summary": "Replaceable floating touch keyboard with bounded Pinyin candidates",
@@ -66,7 +66,7 @@
         "PYTHONUNBUFFERED": "1",
         "MSYS_WINDOW_ROLE": "input-method"
       },
-      "readiness": {"mode": "mipc-ready", "timeout_ms": 5000},
+      "readiness": {"mode": "mipc-ready", "timeout_ms": 12000},
       "after": [
         "org.msys.openstick.ch347:x11-spi-touch-output",
         "org.msys.x11.session:hdmi-output"
