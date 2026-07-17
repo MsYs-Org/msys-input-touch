@@ -36,6 +36,13 @@ current state. This role deliberately does not expose an RPC that injects
 arbitrary text. Applications request visibility and mode, while actual input
 still requires a local touch on the keyboard.
 
+An explicit mode supplied to `show`, `toggle`, or `set_mode`, and a local mode
+key, becomes the default for the next on-demand generation. The stock LVGL and
+Tk providers share `MSYS_APP_STATE_DIR/input-mode.conf`; this persistence is
+an implementation detail and does not add fields or methods to the v1 RPC.
+When that file is absent or invalid, a Chinese `MSYS_LOCALE` selects `zh` and
+all other locales select `en`.
+
 ## Automatic dismissal
 
 The stock touch implementation also hides locally, without sending a focus

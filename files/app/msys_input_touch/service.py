@@ -17,6 +17,7 @@ from .lifecycle import (
     transition_hides_target,
 )
 from .model import INPUT_MODES, KeyboardModel
+from .mode_state import InputModeStore
 from .pinyin import PinyinDictionaryError, load_dictionary
 from msys_sdk.ui_fonts import configure_tk_fonts
 from .ui import TouchKeyboardView
@@ -93,12 +94,17 @@ def run(
     *,
     standalone: bool = False,
     visible: bool = False,
-    mode: str = "en",
+    mode: str | None = None,
 ) -> int:
     startup_started = time.monotonic()
+    mode_store = InputModeStore()
+    selected_mode = mode if mode is not None else mode_store.load()
     backend = create_backend()
     focus = FocusManager(backend)
-    control = InputMethodControl(mode=mode)
+    control = InputMethodControl(
+        mode=selected_mode,
+        on_mode_change=mode_store.save,
+    )
     control.set_runtime_status(
         backend_name=str(getattr(backend, "name", "unavailable")),
         backend_available=bool(getattr(backend, "available", False)),
@@ -161,7 +167,7 @@ def run(
         root.destroy()
         return 2
     worker = InjectionWorker(focus, backend)
-    model = KeyboardModel(dictionary, mode=mode)
+    model = KeyboardModel(dictionary, mode=selected_mode)
     ui_events: queue.SimpleQueue[tuple[int, ControlEvent] | tuple[int, None]] = (
         queue.SimpleQueue()
     )
@@ -454,7 +460,7 @@ def run(
             daemon=True,
         ).start()
     elif visible:
-        result, event = control.handle("show", {"mode": mode})
+        result, event = control.handle("show", {"mode": selected_mode})
         del result
         schedule_control(event)
 
@@ -468,12 +474,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="MSYS floating touch input method")
     parser.add_argument("--standalone", action="store_true")
     parser.add_argument("--visible", action="store_true")
-    parser.add_argument("--mode", choices=sorted(INPUT_MODES), default="en")
+    parser.add_argument("--mode", choices=sorted(INPUT_MODES))
     args = parser.parse_args(argv)
     return run(
         standalone=bool(args.standalone),
         visible=bool(args.visible),
-        mode=str(args.mode),
+        mode=str(args.mode) if args.mode is not None else None,
     )
 
 

@@ -1,6 +1,15 @@
 # MSYS Touch Input
 
-Current source version: `0.4.0`.
+Current source version: `0.4.1`.
+
+Version 0.4.1 keeps the selected `en`, `zh`, `numeric`, or `symbols` mode in
+the package-owned `MSYS_APP_STATE_DIR/input-mode.conf`. Both the default LVGL
+provider and Tk fallback load the same tiny state file on every on-demand
+generation, and local mode keys plus the existing `show({mode})` and
+`set_mode({mode})` calls update it atomically. If no valid saved mode exists,
+`MSYS_LOCALE=zh-*` selects Chinese and every other locale selects English.
+There is no resident preference service, D-Bus dependency, or polling loop;
+an unavailable state volume never prevents typing or focus dismissal.
 
 Version 0.4.0 makes `keyboard-lvgl` the selected `input-method` role provider;
 the Tk presenter remains installed at lower priority as an explicit fallback.

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 from .model import INPUT_MODES
 
@@ -35,7 +35,12 @@ class ControlEvent:
 class InputMethodControl:
     """Thread-safe typed role state shared by IPC and the Tk presenter."""
 
-    def __init__(self, *, mode: str = "en") -> None:
+    def __init__(
+        self,
+        *,
+        mode: str = "en",
+        on_mode_change: Callable[[str], None] | None = None,
+    ) -> None:
         if mode not in INPUT_MODES:
             raise ValueError(f"unsupported input mode: {mode}")
         self._lock = threading.Lock()
@@ -48,6 +53,18 @@ class InputMethodControl:
         self._has_focus_target = False
         self._last_hide_restore_target = False
         self._last_hide_reason = "requested"
+        self._on_mode_change = on_mode_change
+
+    def _mode_changed(self, mode: str) -> None:
+        callback = self._on_mode_change
+        if callback is None:
+            return
+        try:
+            callback(mode)
+        except OSError as exc:
+            # A read-only or temporarily unavailable state volume must not
+            # make local typing, focus handling, or framework IPC fail.
+            print(f"input-method: mode persistence unavailable: {exc}", flush=True)
 
     def set_runtime_status(
         self,
@@ -67,10 +84,14 @@ class InputMethodControl:
     def update_ui_state(self, *, mode: str, shift: bool, composition: str) -> None:
         if mode not in INPUT_MODES:
             raise ValueError(f"unsupported input mode: {mode}")
+        changed = False
         with self._lock:
+            changed = self._mode != mode
             self._mode = mode
             self._shift = bool(shift)
             self._composition = str(composition)[:24]
+        if changed:
+            self._mode_changed(mode)
 
     def local_hide(
         self,
@@ -122,7 +143,11 @@ class InputMethodControl:
             self._mode = normalized
             self._shift = False
             self._composition = ""
-            return ControlEvent("mode", normalized)
+            event = ControlEvent("mode", normalized)
+        # A local mode command is an explicit preference even when it happens
+        # to match the locale-derived default of this fresh generation.
+        self._mode_changed(normalized)
+        return event
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
@@ -190,8 +215,12 @@ class InputMethodControl:
             ):
                 raise ValueError("reason must be a non-empty string of at most 64 characters")
             requested_reason = requested_reason.strip()
+        changed_mode: str | None = None
         with self._lock:
             if normalized_mode is not None:
+                # Supplying a mode is an explicit preference. Persist it even
+                # if it matches the unsaved locale-derived startup value.
+                changed_mode = normalized_mode
                 self._mode = normalized_mode
                 self._shift = False
                 self._composition = ""
@@ -252,6 +281,8 @@ class InputMethodControl:
                 },
                 "has_focus_target": self._has_focus_target,
             }
+        if changed_mode is not None:
+            self._mode_changed(changed_mode)
         return result, event
 
 

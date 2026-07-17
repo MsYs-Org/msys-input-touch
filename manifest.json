@@ -3,7 +3,7 @@
   "package": {
     "id": "org.msys.input.touch",
     "name": "MSYS Touch Input",
-    "version": "0.4.0",
+    "version": "0.4.1",
     "kind": "system",
     "vendor": "MSYS",
     "summary": "Replaceable floating touch keyboard with bounded Pinyin candidates",

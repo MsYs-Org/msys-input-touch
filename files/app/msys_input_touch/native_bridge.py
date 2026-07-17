@@ -24,6 +24,7 @@ from .lifecycle import (
     transition_hides_target,
 )
 from .model import INPUT_MODES, InputAction, KeyboardModel
+from .mode_state import InputModeStore
 from .pinyin import load_dictionary
 from .service import (
     error_packet,
@@ -163,19 +164,24 @@ def run(
     *,
     standalone: bool = False,
     visible: bool = False,
-    mode: str = "en",
+    mode: str | None = None,
     run_ms: int = 0,
 ) -> int:
     import tkinter as tk
 
+    mode_store = InputModeStore()
+    selected_mode = mode if mode is not None else mode_store.load()
     backend = create_backend()
     focus = FocusManager(backend)
-    control = InputMethodControl(mode=mode)
+    control = InputMethodControl(
+        mode=selected_mode,
+        on_mode_change=mode_store.save,
+    )
     control.set_runtime_status(
         backend_name=str(getattr(backend, "name", "unavailable")),
         backend_available=bool(getattr(backend, "available", False)),
     )
-    model = KeyboardModel(load_dictionary(), mode=mode)
+    model = KeyboardModel(load_dictionary(), mode=selected_mode)
     worker = InjectionWorker(focus, backend)
     events: queue.SimpleQueue[tuple[str, object]] = queue.SimpleQueue()
     identity = os.environ.get("MSYS_WINDOW_IDENTITY", "org.msys.input.touch")
@@ -425,7 +431,7 @@ def run(
 
     if standalone:
         if visible:
-            control.handle("show", {"mode": mode})
+            control.handle("show", {"mode": selected_mode})
             presenter.send({"type": "show"})
     else:
         client = MsysClient.from_env()
@@ -486,13 +492,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="MSYS LVGL touch keyboard bridge")
     parser.add_argument("--standalone", action="store_true")
     parser.add_argument("--visible", action="store_true")
-    parser.add_argument("--mode", choices=sorted(INPUT_MODES), default="en")
+    parser.add_argument("--mode", choices=sorted(INPUT_MODES))
     parser.add_argument("--run-ms", type=int, default=0)
     args = parser.parse_args(argv)
     return run(
         standalone=bool(args.standalone),
         visible=bool(args.visible),
-        mode=str(args.mode),
+        mode=str(args.mode) if args.mode is not None else None,
         run_ms=max(0, int(args.run_ms)),
     )
 

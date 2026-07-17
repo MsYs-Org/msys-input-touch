@@ -111,6 +111,18 @@ class InputMethodControlTests(unittest.TestCase):
         self.assertFalse(event.restore_target)
         self.assertEqual(event.reason, "local")
 
+    def test_mode_changes_use_one_shared_persistence_hook(self) -> None:
+        saved: list[str] = []
+        control = InputMethodControl(mode="en", on_mode_change=saved.append)
+
+        control.handle("set_mode", {"mode": "zh"})
+        control.update_ui_state(mode="zh", shift=False, composition="")
+        control.update_ui_state(mode="numeric", shift=False, composition="")
+        control.local_mode("symbols")
+        control.handle("set_mode", {"mode": "symbols"})
+
+        self.assertEqual(saved, ["zh", "numeric", "symbols", "symbols"])
+
 
 if __name__ == "__main__":
     unittest.main()
