@@ -1,6 +1,9 @@
 # MSYS Touch Input
 
-Current source version: `0.4.5`.
+Current source version: `0.4.6`.
+
+Version 0.4.6 clamps the movable keyboard to the live X11 workarea, keeping
+every key above mobile navigation and below system chrome after a drag.
 
 Version 0.4.5 makes the light LVGL panel movable by dragging its header. The
 native window clamps each move to the live X11 screen and reports the new

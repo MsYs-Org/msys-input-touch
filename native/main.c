@@ -54,8 +54,10 @@ struct keyboard {
     int panel_y;
     int panel_width;
     int panel_height;
-    int screen_width;
-    int screen_height;
+    int work_x;
+    int work_y;
+    int work_width;
+    int work_height;
     lv_point_t drag_anchor;
     uint64_t stop_at_ms;
     char input[INPUT_BUFFER];
@@ -71,16 +73,56 @@ static uint64_t monotonic_ms(void)
     return (uint64_t)now.tv_sec * 1000U + (uint64_t)now.tv_nsec / 1000000U;
 }
 
-static bool display_size(const char *display_name, int *width, int *height)
+static bool display_bounds(const char *display_name, int *work_x, int *work_y,
+                           int *work_width, int *work_height)
 {
     Display *display = XOpenDisplay(display_name);
     int screen;
-    if(display == NULL || width == NULL || height == NULL) return false;
+    Window root;
+    Atom property;
+    Atom actual_type = None;
+    int actual_format = 0;
+    unsigned long count = 0U;
+    unsigned long remaining = 0U;
+    unsigned char *data = NULL;
+    char text[512];
+    char *area;
+    int x;
+    int y;
+    int width;
+    int height;
+    if(display == NULL || work_x == NULL || work_y == NULL ||
+       work_width == NULL || work_height == NULL) return false;
     screen = DefaultScreen(display);
-    *width = DisplayWidth(display, screen);
-    *height = DisplayHeight(display, screen);
+    root = RootWindow(display, screen);
+    *work_x = 0;
+    *work_y = 0;
+    *work_width = DisplayWidth(display, screen);
+    *work_height = DisplayHeight(display, screen);
+    property = XInternAtom(display, "_MSYS_LAYOUT_EFFECTIVE_V1", True);
+    if(property != None &&
+       XGetWindowProperty(display, root, property, 0L,
+                          (long)(sizeof(text) / 4U), False, AnyPropertyType,
+                          &actual_type, &actual_format, &count, &remaining,
+                          &data) == Success && data != NULL &&
+       actual_format == 8 && count > 0U && count < sizeof(text)) {
+        memcpy(text, data, count);
+        text[count] = '\0';
+        area = strstr(text, "workarea=");
+        if(area != NULL &&
+           sscanf(area, "workarea=%d,%d,%d,%d", &x, &y, &width, &height) == 4 &&
+           x >= 0 && y >= 0 && width > 0 && height > 0 &&
+           x + width <= DisplayWidth(display, screen) &&
+           y + height <= DisplayHeight(display, screen)) {
+            *work_x = x;
+            *work_y = y;
+            *work_width = width;
+            *work_height = height;
+        }
+    }
+    if(data != NULL) XFree(data);
     XCloseDisplay(display);
-    return *width > 0 && *height > 0;
+    return *work_width > 0 && *work_height > 0;
 }
 
 static void signal_cb(int signal_number)
@@ -151,10 +193,10 @@ static void emit_move(int x, int y)
     (void)fflush(stdout);
 }
 
-static int clamp_position(int value, int extent, int screen_extent)
+static int clamp_position(int value, int extent, int origin, int available)
 {
-    int maximum = screen_extent > extent ? screen_extent - extent : 0;
-    if(value < 0) return 0;
+    int maximum = origin + (available > extent ? available - extent : 0);
+    if(value < origin) return origin;
     if(value > maximum) return maximum;
     return value;
 }
@@ -183,10 +225,12 @@ static void header_drag_event_cb(lv_event_t *event)
             event_point(event, &point)) {
         x = clamp_position(keyboard->panel_x + point.x -
                                keyboard->drag_anchor.x,
-                           keyboard->panel_width, keyboard->screen_width);
+                           keyboard->panel_width, keyboard->work_x,
+                           keyboard->work_width);
         y = clamp_position(keyboard->panel_y + point.y -
                                keyboard->drag_anchor.y,
-                           keyboard->panel_height, keyboard->screen_height);
+                           keyboard->panel_height, keyboard->work_y,
+                           keyboard->work_height);
         if((x != keyboard->panel_x || y != keyboard->panel_y) &&
            msys_ui_surface_set_geometry(keyboard->surface, x, y,
                                         (uint16_t)keyboard->panel_width,
@@ -712,10 +756,13 @@ int main(int argc, char **argv)
     keyboard.panel_y = surface_config.y;
     keyboard.panel_width = surface_config.width;
     keyboard.panel_height = surface_config.height;
-    if(!display_size(runtime_config.display_name, &keyboard.screen_width,
-                     &keyboard.screen_height)) {
-        keyboard.screen_width = surface_config.x + surface_config.width;
-        keyboard.screen_height = surface_config.y + surface_config.height;
+    if(!display_bounds(runtime_config.display_name, &keyboard.work_x,
+                       &keyboard.work_y, &keyboard.work_width,
+                       &keyboard.work_height)) {
+        keyboard.work_x = 0;
+        keyboard.work_y = 0;
+        keyboard.work_width = surface_config.x + surface_config.width;
+        keyboard.work_height = surface_config.y + surface_config.height;
     }
     keyboard.runtime = msys_ui_runtime_create(&runtime_config);
     if(keyboard.runtime == NULL) return 1;
