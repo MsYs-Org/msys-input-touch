@@ -583,6 +583,7 @@ int main(int argc, char **argv)
     };
     keyboard_t keyboard;
     bool initially_visible = false;
+    uint64_t run_for_ms = 0U;
     const char *ui_path = NULL;
     int flags;
     int index;
@@ -615,7 +616,7 @@ int main(int argc, char **argv)
         else if(strcmp(argv[index], "--ui") == 0 && index + 1 < argc)
             ui_path = argv[++index];
         else if(strcmp(argv[index], "--run-ms") == 0 && index + 1 < argc)
-            keyboard.stop_at_ms = monotonic_ms() + strtoull(argv[++index], NULL, 10);
+            run_for_ms = strtoull(argv[++index], NULL, 10);
         else {
             usage(stderr, argv[0]);
             return 2;
@@ -665,6 +666,10 @@ int main(int argc, char **argv)
     active_keyboard = &keyboard;
     (void)signal(SIGINT, signal_cb);
     (void)signal(SIGTERM, signal_cb);
+    /* Test/preview lifetime starts only after fonts, XML and the first show
+     * request are prepared.  Starting it during argv parsing made a loaded
+     * target destroy the X11 window inside the idle-observation interval. */
+    if(run_for_ms > 0U) keyboard.stop_at_ms = monotonic_ms() + run_for_ms;
     while((keyboard.stop_at_ms == 0U ||
            monotonic_ms() < keyboard.stop_at_ms) &&
           !msys_ui_surface_closed(keyboard.surface) &&

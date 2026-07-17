@@ -37,7 +37,7 @@ run_case() {
     DISPLAY="$display" "$binary" --display "$display" --output spi --visible \
         --ui "$root/ui/keyboard.xml" \
         --x "$x" --y "$y" --width "$width" --height "$height" \
-        --run-ms 2100 </dev/null >"$tmp/app.log" 2>&1 &
+        </dev/null >"$tmp/app.log" 2>&1 &
     app_pid=$!
     window=
     attempt=0
@@ -83,6 +83,10 @@ run_case() {
     sleep 1.1
     current=$(DISPLAY="$display" xprop -id "$window" _MSYS_LVGL_LAST_FLUSH)
     test "$previous" = "$current" || fail_case "$display idle flush changed" "$tmp"
+    # End the unbounded probe only after its observation window. A fixed app
+    # lifetime races slow xprop calls under target load and turns window
+    # destruction into a false repaint result.
+    kill "$app_pid" 2>/dev/null || fail_case "$display frontend exited early" "$tmp"
     wait "$app_pid" || fail_case "$display frontend failed" "$tmp"
     kill "$xvfb_pid" 2>/dev/null || true
     wait "$xvfb_pid" 2>/dev/null || true

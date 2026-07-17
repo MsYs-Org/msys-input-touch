@@ -1,6 +1,12 @@
 # MSYS Touch Input
 
-Current source version: `0.4.1`.
+Current source version: `0.4.2`.
+
+Version 0.4.2 starts the native frontend's bounded `--run-ms` preview clock
+after XML, fonts, and the initial show request are prepared. On a busy target,
+the previous test-only clock could expire while the idle probe was observing a
+perfectly stable window and misreport its destruction as an idle repaint. This
+does not add a runtime timer or change production rendering.
 
 Version 0.4.1 keeps the selected `en`, `zh`, `numeric`, or `symbols` mode in
 the package-owned `MSYS_APP_STATE_DIR/input-mode.conf`. Both the default LVGL
