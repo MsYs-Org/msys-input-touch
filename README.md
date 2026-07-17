@@ -1,6 +1,10 @@
 # MSYS Touch Input
 
-Current source version: `0.4.3`.
+Current source version: `0.4.4`.
+
+Version 0.4.4 rebuilds the optional native LVGL provider against the shared
+`msys-ui-lvgl` 0.3.9 runtime.  It keeps the Tk provider as an explicit
+fallback and changes no input-method lifecycle or focus semantics.
 
 Version 0.4.3 gives the native LVGL provider a 12-second cold-start readiness
 budget.  The provider loads the CJK font, XML document, X11 surface and Python
